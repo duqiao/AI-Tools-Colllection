@@ -1,0 +1,847 @@
+openapi: 3.0.3
+info:
+  title: WeChat Media Translator API
+  description: RESTful API for WeChat mini-program media-to-text translation service
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@wechat-translator.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.wechat-translator.com/v1
+    description: Production server
+  - url: https://staging-api.wechat-translator.com/v1
+    description: Staging server
+
+paths:
+  # User Management
+  /auth/login:
+    post:
+      summary: User login with WeChat
+      description: Authenticate user using WeChat login code
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  description: WeChat login authorization code
+                  example: "071Jf0002S3l1A1w2o0002JQIw1Jf0uJ"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      token:
+                        type: string
+                        description: JWT authentication token
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      expires_in:
+                        type: integer
+                        description: Token expiration in seconds
+                        example: 86400
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      summary: Refresh authentication token
+      description: Get new JWT token using refresh token
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh token
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      expires_in:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # User Profile
+  /user/profile:
+    get:
+      summary: Get user profile
+      description: Retrieve current user's profile information
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /user/quota:
+    get:
+      summary: Get user quota information
+      description: Retrieve current user's translation quota and usage
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Quota information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/QuotaInfo'
+
+  # Translation Management
+  /translations:
+    post:
+      summary: Create new translation request
+      description: Upload media file for transcription
+      tags:
+        - Translation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Media file (audio/video)
+                file_type:
+                  type: string
+                  enum: [voice_recording, audio_file, video_file, wechat_video, url_media]
+                  description: Type of media file
+                language:
+                  type: string
+                  description: Target language (ISO 639-1)
+                  example: "zh-CN"
+                source_url:
+                  type: string
+                  description: URL source for url_media type
+                is_public:
+                  type: boolean
+                  default: false
+                  description: Make result publicly accessible
+      responses:
+        '201':
+          description: Translation request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Translation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '402':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "quota_exceeded"
+                  message:
+                    type: string
+                    example: "Translation quota exceeded. Please upgrade to VIP."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "file_too_large"
+                  message:
+                    type: string
+                    example: "File size exceeds maximum limit"
+
+    get:
+      summary: List user translations
+      description: Get paginated list of user's translation history
+      tags:
+        - Translation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Items per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, processing, completed, failed]
+          description: Filter by processing status
+      responses:
+        '200':
+          description: Translation list retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      translations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Translation'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /translations/{translation_id}:
+    get:
+      summary: Get translation details
+      description: Retrieve specific translation details and results
+      tags:
+        - Translation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: translation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Translation details retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TranslationDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete translation
+      description: Delete translation record and associated files
+      tags:
+        - Translation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: translation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Translation deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Subscription Management
+  /subscriptions:
+    get:
+      summary: Get subscription plans
+      description: List available subscription plans and pricing
+      tags:
+        - Subscription
+      responses:
+        '200':
+          description: Subscription plans retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      plans:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SubscriptionPlan'
+
+  /subscriptions/subscribe:
+    post:
+      summary: Create subscription
+      description: Subscribe to a VIP plan
+      tags:
+        - Subscription
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tier
+                - billing_cycle
+              properties:
+                tier:
+                  type: string
+                  enum: [basic, premium, enterprise]
+                  description: Subscription tier
+                billing_cycle:
+                  type: string
+                  enum: [monthly, yearly]
+                  description: Billing cycle
+                payment_method:
+                  type: string
+                  enum: [wechat_pay, alipay]
+                  description: Payment method
+      responses:
+        '200':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      payment_params:
+                        type: object
+                        description: Payment parameters for mini-program
+                      order_id:
+                        type: string
+                        description: Order ID
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subscriptions/current:
+    get:
+      summary: Get current subscription
+      description: Retrieve user's current subscription details
+      tags:
+        - Subscription
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current subscription retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Subscription'
+
+  /subscriptions/cancel:
+    post:
+      summary: Cancel subscription
+      description: Cancel current subscription (effective at end of period)
+      tags:
+        - Subscription
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Subscription cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Subscription cancelled successfully"
+
+  # Payment Webhooks
+  /webhooks/payment:
+    post:
+      summary: Payment webhook
+      description: Handle payment notifications from WeChat Pay/Alipay
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payment provider webhook payload
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "SUCCESS"
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        openid:
+          type: string
+          example: "ox1234567890abcdef"
+        nickname:
+          type: string
+          example: "张三"
+        avatar_url:
+          type: string
+          example: "https://thirdwx.qlogo.cn/avatar/123"
+        subscription_tier:
+          type: string
+          enum: [free, basic, premium, enterprise]
+          example: "basic"
+        subscription_status:
+          type: string
+          enum: [active, expired, cancelled, pending]
+          example: "active"
+        subscription_expires_at:
+          type: string
+          format: date-time
+          example: "2025-11-18T10:30:00Z"
+        remaining_quota:
+          type: integer
+          example: 7
+        total_translations:
+          type: integer
+          example: 23
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T10:30:00Z"
+        is_verified:
+          type: boolean
+          example: true
+
+    UserProfile:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        usage_statistics:
+          type: object
+          properties:
+            this_month:
+              type: integer
+              example: 15
+            lifetime:
+              type: integer
+              example: 150
+            favorite_file_types:
+              type: array
+              items:
+                type: string
+              example: ["voice_recording", "audio_file"]
+
+    QuotaInfo:
+      type: object
+      properties:
+        remaining_quota:
+          type: integer
+          example: 7
+        quota_limit:
+          type: integer
+          example: 10
+        period_start:
+          type: string
+          format: date-time
+          example: "2025-10-01T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2025-11-01T00:00:00Z"
+        tier:
+          type: string
+          enum: [free, basic, premium, enterprise]
+          example: "basic"
+        can_translate:
+          type: boolean
+          example: true
+
+    Translation:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        original_filename:
+          type: string
+          example: "voice_message.mp3"
+        file_type:
+          type: string
+          enum: [voice_recording, audio_file, video_file, wechat_video, url_media]
+          example: "voice_recording"
+        file_size:
+          type: integer
+          example: 2048576
+        file_duration:
+          type: integer
+          example: 45
+        language:
+          type: string
+          example: "zh-CN"
+        transcription_text:
+          type: string
+          example: "你好，我想预约一个明天的会议。"
+        confidence_score:
+          type: number
+          example: 0.95
+        processing_status:
+          type: string
+          enum: [queued, processing, completed, failed]
+          example: "completed"
+        processing_provider:
+          type: string
+          example: "alibaba_cloud"
+        processing_time:
+          type: integer
+          example: 2500
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T14:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T14:32:33Z"
+        expires_at:
+          type: string
+          format: date-time
+          example: "2025-11-17T14:30:00Z"
+
+    TranslationDetails:
+      allOf:
+        - $ref: '#/components/schemas/Translation'
+        - type: object
+          properties:
+            file_url:
+              type: string
+              example: "https://cloud-storage.wechat.com/files/voice_001.mp3"
+            source_type:
+              type: string
+              enum: [direct_upload, wechat_message, url_import]
+              example: "wechat_message"
+            error_message:
+              type: string
+              example: null
+            tags:
+              type: array
+              items:
+                type: string
+              example: ["工作", "会议"]
+
+    SubscriptionPlan:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [basic, premium, enterprise]
+          example: "basic"
+        name:
+          type: string
+          example: "基础VIP"
+        description:
+          type: string
+          example: "适合轻度使用"
+        features:
+          type: array
+          items:
+            type: string
+          example: ["10次翻译/月", "优先处理", "历史记录保存30天"]
+        pricing:
+          type: object
+          properties:
+            monthly:
+              type: integer
+              example: 990
+            yearly:
+              type: integer
+              example: 9900
+        translations_per_month:
+          type: integer
+          example: 10
+        is_popular:
+          type: boolean
+          example: false
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440002"
+        tier:
+          type: string
+          enum: [basic, premium, enterprise]
+          example: "basic"
+        status:
+          type: string
+          enum: [active, expired, cancelled, pending]
+          example: "active"
+        start_date:
+          type: string
+          format: date-time
+          example: "2025-10-18T00:00:00Z"
+        end_date:
+          type: string
+          format: date-time
+          example: "2025-11-18T00:00:00Z"
+        auto_renew:
+          type: boolean
+          example: true
+        price:
+          type: integer
+          example: 990
+        currency:
+          type: string
+          example: "CNY"
+        billing_cycle:
+          type: string
+          enum: [monthly, yearly]
+          example: "monthly"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-18T10:30:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        total_pages:
+          type: integer
+          example: 5
+        total_items:
+          type: integer
+          example: 100
+        items_per_page:
+          type: integer
+          example: 20
+        has_next:
+          type: boolean
+          example: true
+        has_prev:
+          type: boolean
+          example: false
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "invalid_request"
+              message:
+                type: string
+                example: "Invalid request parameters"
+
+    Unauthorized:
+      description: Unauthorized access
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "unauthorized"
+              message:
+                type: string
+                example: "Authentication required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "not_found"
+              message:
+                type: string
+                example: "Requested resource not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "internal_error"
+              message:
+                type: string
+                example: "An internal error occurred"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: User
+    description: User profile and quota management
+  - name: Translation
+    description: Media-to-text translation operations
+  - name: Subscription
+    description: VIP subscription management
+  - name: Webhooks
+    description: Payment processing webhooks

@@ -1,0 +1,99 @@
+<!-- components/upgrade-prompt/index.wxml -->
+<view wx:if="{{show}}" class="upgrade-mask" bind:tap="onClose">
+  <view class="upgrade-modal" catch:tap="stopPropagation">
+    <!-- 弹窗头部 -->
+    <view class="modal-header">
+      <view class="header-icon">🚀</view>
+      <view class="header-title">{{getDefaultTitle()}}</view>
+      <button class="close-btn" bind:tap="onClose">×</button>
+    </view>
+
+    <!-- 弹窗内容 -->
+    <view class="modal-content">
+      <!-- 消息描述 -->
+      <view class="upgrade-message">
+        <text>{{getDefaultMessage()}}</text>
+      </view>
+
+      <!-- 当前配额信息 -->
+      <view wx:if="{{quotaInfo}}" class="current-quota">
+        <text class="quota-label">当前配额：</text>
+        <text class="quota-value {{quotaInfo.warning_level}}">{{quotaInfo.remaining}}/{{quotaInfo.monthly_quota}} 次</text>
+      </view>
+
+      <!-- 套餐选择 -->
+      <view class="plans-container">
+        <view wx:for="{{plans}}" 
+              wx:key="id" 
+              class="plan-item {{selectedPlan.id === item.id ? 'selected' : ''}} {{item.recommended ? 'recommended' : ''}}"
+              data-plan="{{item.id}}"
+              bind:tap="onPlanSelect">
+          
+          <!-- 推荐标签 -->
+          <view wx:if="{{item.recommended}}" class="recommend-tag">推荐</view>
+          
+          <!-- 套餐内容 -->
+          <view class="plan-content">
+            <view class="plan-header">
+              <view class="plan-name">{{item.name}}</view>
+              <view class="plan-price">
+                <text class="price-symbol">¥</text>
+                <text class="price-value">{{item.price}}</text>
+                <text class="price-period">/{{item.period}}</text>
+              </view>
+            </view>
+            
+            <view class="plan-quota">
+              <text class="quota-text">{{item.quota}}次翻译/{{item.period}}</text>
+            </view>
+            
+            <!-- 功能列表 -->
+            <view class="plan-features">
+              <view wx:for="{{item.features}}" 
+                    wx:for-item="feature" 
+                    wx:key="*this" 
+                    class="feature-item">
+                <text class="feature-icon">✓</text>
+                <text class="feature-text">{{feature}}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 选中指示器 -->
+          <view wx:if="{{selectedPlan.id === item.id}}" class="selected-indicator">
+            <text class="selected-icon">✓</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 弹窗底部 -->
+    <view class="modal-footer">
+      <button wx:if="{{type !== 'exhausted'}}" 
+              class="skip-btn" 
+              bind:tap="onSkip">
+        暂时跳过
+      </button>
+      
+      <button class="upgrade-btn {{loading ? 'loading' : ''}}" 
+              bind:tap="onUpgrade"
+              disabled="{{loading}}">
+        <block wx:if="{{loading}}">
+          <text class="loading-icon">⏳</text>
+          <text>处理中...</text>
+        </block>
+        <block wx:else>
+          <text wx:if="{{selectedPlan}}">
+            立即升级 ¥{{selectedPlan.price}}
+          </text>
+          <text wx:else>选择套餐</text>
+        </block>
+      </button>
+    </view>
+
+    <!-- 额外信息 -->
+    <view class="modal-extra">
+      <text class="extra-text">升级后立即生效，支持微信支付</text>
+    </view>
+  </view>
+</view>

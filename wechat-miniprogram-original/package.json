@@ -1,0 +1,45 @@
+{
+  "name": "wechat-media-translator-frontend",
+  "version": "1.0.0",
+  "description": "WeChat Mini-Program for Media Translation",
+  "main": "app.js",
+  "scripts": {
+    "dev:mp-weixin": "node node_modules/@dcloudio/uni-cli/bin/uni-cli.js --platform mp-weixin",
+    "dev:h5": "node node_modules/@dcloudio/uni-cli/bin/uni-cli.js --platform h5",
+    "build:mp-weixin": "uni build --platform mp-weixin",
+    "build:h5": "uni build --platform h5",
+    "type-check": "vue-tsc --noEmit",
+    "lint": "eslint src --ext .vue,.js,.ts",
+    "lint:fix": "eslint src --ext .vue,.js,.ts --fix"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "^3.0.0",
+    "@dcloudio/uni-mp-weixin": "^3.0.0",
+    "@dcloudio/uni-ui": "^1.4.0",
+    "vue": "^3.3.0",
+    "pinia": "^2.1.0"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.0",
+    "@dcloudio/uni-automator": "^3.0.0",
+    "@dcloudio/uni-cli-shared": "^3.0.0",
+    "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "@vue/eslint-config-typescript": "^12.0.0",
+    "eslint": "^8.50.0",
+    "eslint-plugin-vue": "^9.17.0",
+    "typescript": "^5.2.0",
+    "vue-tsc": "^1.8.22"
+  },
+  "keywords": [
+    "wechat",
+    "miniprogram",
+    "media",
+    "translation",
+    "speech",
+    "ai"
+  ],
+  "author": "AI Tools Collection",
+  "license": "MIT"
+}

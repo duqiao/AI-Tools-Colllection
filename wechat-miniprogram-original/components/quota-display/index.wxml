@@ -1,0 +1,111 @@
+<!-- components/quota-display/index.wxml -->
+<view class="quota-display {{customClass}}">
+  <!-- 加载状态 -->
+  <view wx:if="{{loading}}" class="quota-loading">
+    <view class="loading-icon">⏳</view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <!-- 错误状态 -->
+  <view wx:elif="{{error}}" class="quota-error">
+    <view class="error-icon">⚠️</view>
+    <text class="error-text">{{error}}</text>
+    <button class="retry-btn" size="mini" bind:tap="refreshQuota">重试</button>
+  </view>
+
+  <!-- 配额信息显示 -->
+  <view wx:elif="{{quotaInfo}}" class="quota-info">
+    <!-- 简洁模式 -->
+    <view class="quota-simple" wx:if="{{!showDetails}}">
+      <view class="quota-main">
+        <view class="quota-remaining {{quotaInfo.warning_level}}">
+          {{quotaInfo.remaining}}/{{quotaInfo.monthly_quota}}
+        </view>
+        <view class="quota-label">次翻译</view>
+      </view>
+      
+      <!-- 状态指示器 -->
+      <view class="quota-status">
+        <view wx:if="{{quotaInfo.warning_level === 'exhausted'}}" class="status-indicator exhausted">
+          <text class="status-text">已用完</text>
+        </view>
+        <view wx:elif="{{quotaInfo.warning_level === 'critical'}}" class="status-indicator critical">
+          <text class="status-text">仅剩{{quotaInfo.remaining}}次</text>
+        </view>
+        <view wx:elif="{{quotaInfo.warning_level === 'warning'}}" class="status-indicator warning">
+          <text class="status-text">{{quotaInfo.message}}</text>
+        </view>
+        <view wx:else class="status-indicator normal">
+          <text class="status-text">充足</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="quota-actions">
+        <button wx:if="{{quotaInfo.show_upgrade_prompt}}" 
+                class="upgrade-btn" 
+                size="mini" 
+                bind:tap="onUpgradeTap">
+          升级套餐
+        </button>
+        <button class="details-btn" 
+                size="mini" 
+                bind:tap="onDetailsTap">
+          详情
+        </button>
+      </view>
+    </view>
+
+    <!-- 详细模式 -->
+    <view class="quota-detailed" wx:else>
+      <view class="detail-header">
+        <text class="detail-title">配额详情</text>
+        <button class="close-btn" size="mini" bind:tap="hideDetails">×</button>
+      </view>
+
+      <view class="detail-content">
+        <!-- 计划类型 -->
+        <view class="detail-item">
+          <text class="detail-label">当前套餐：</text>
+          <text class="detail-value">{{quotaInfo.plan_type === 'free' ? '免费版' : quotaInfo.plan_type}}</text>
+        </view>
+
+        <!-- 配额使用情况 -->
+        <view class="detail-item">
+          <text class="detail-label">已用配额：</text>
+          <text class="detail-value">{{quotaInfo.used_quota}}/{{quotaInfo.monthly_quota}}</text>
+        </view>
+
+        <!-- 剩余配额 -->
+        <view class="detail-item">
+          <text class="detail-label">剩余配额：</text>
+          <text class="detail-value {{quotaInfo.warning_level}}">{{quotaInfo.remaining}}</text>
+        </view>
+
+        <!-- 重置时间 -->
+        <view class="detail-item" wx:if="{{quotaInfo.next_reset}}">
+          <text class="detail-label">重置时间：</text>
+          <text class="detail-value">{{quotaInfo.next_reset}}</text>
+        </view>
+
+        <!-- 状态消息 -->
+        <view class="detail-item" wx:if="{{quotaInfo.message}}">
+          <text class="detail-label">状态：</text>
+          <text class="detail-value">{{quotaInfo.message}}</text>
+        </view>
+      </view>
+
+      <!-- 详细模式操作按钮 -->
+      <view class="detail-actions">
+        <button wx:if="{{quotaInfo.show_upgrade_prompt}}" 
+                class="upgrade-btn detail-upgrade" 
+                bind:tap="onUpgradeTap">
+          立即升级
+        </button>
+        <button class="refresh-btn" size="mini" bind:tap="refreshQuota">
+          刷新
+        </button>
+      </view>
+    </view>
+  </view>
+</view>

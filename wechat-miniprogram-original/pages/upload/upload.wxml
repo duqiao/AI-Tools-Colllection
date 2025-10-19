@@ -1,0 +1,116 @@
+<!-- pages/upload/upload.wxml -->
+<view class="container">
+  <!-- Quota Display Component -->
+  <quota-display 
+    bind:upgrade="onQuotaUpgrade"
+    bind:details="onQuotaDetails">
+  </quota-display>
+
+  <!-- File Selector -->
+  <view class="file-selector" wx:if="{{showFileSelector}}">
+    <view class="upload-area">
+      <image class="upload-icon" src="/static/icons/upload.png" mode="aspectFit"></image>
+      <text class="upload-title">选择媒体文件</text>
+      <text class="upload-subtitle">支持音频、视频文件，最大200MB</text>
+      
+      <view class="button-group">
+        <button class="btn-primary" bindtap="chooseMedia">
+          <image class="btn-icon" src="/static/icons/camera.png" mode="aspectFit"></image>
+          拍摄或选择
+        </button>
+        <button class="btn-secondary" bindtap="chooseMessageFile">
+          <image class="btn-icon" src="/static/icons/file.png" mode="aspectFit"></image>
+          从聊天选择
+        </button>
+      </view>
+    </view>
+
+    <!-- Supported formats -->
+    <view class="supported-formats">
+      <text class="formats-title">支持格式:</text>
+      <text class="formats-list">MP3, WAV, AAC, M4A, MP4, AVI, MOV, WMV等</text>
+    </view>
+  </view>
+
+  <!-- Selected File Preview -->
+  <view class="file-preview" wx:if="{{selectedFile && showFileSelector}}">
+    <view class="file-info">
+      <image class="file-type-icon" src="/static/icons/{{selectedFile.type}}.png" mode="aspectFit"></image>
+      <view class="file-details">
+        <text class="file-name">{{selectedFile.name}}</text>
+        <text class="file-meta">
+          {{selectedFile.type === 'video' ? '视频' : '音频'}} · 
+          {{selectedFile.size > 1048576 ? (selectedFile.size / 1048576).toFixed(1) + 'MB' : (selectedFile.size / 1024).toFixed(1) + 'KB'}}
+          <text wx:if="{{selectedFile.duration}}"> · {{selectedFile.duration}}秒</text>
+        </text>
+      </view>
+    </view>
+    
+    <view class="file-actions">
+      <button class="btn-primary" bindtap="startUpload">开始翻译</button>
+      <button class="btn-secondary" bindtap="selectNewFile">重新选择</button>
+    </view>
+  </view>
+
+  <!-- Upload Progress -->
+  <view class="upload-progress" wx:if="{{showUploading}}">
+    <view class="progress-header">
+      <text class="progress-title">正在上传文件</text>
+      <text class="progress-percent">{{uploadProgress}}%</text>
+    </view>
+    <view class="progress-bar">
+      <view class="progress-fill" style="width: {{uploadProgress}}%"></view>
+    </view>
+    <text class="progress-status">请稍候，文件正在上传中...</text>
+  </view>
+
+  <!-- Processing Status -->
+  <view class="processing-status" wx:if="{{showProcessing}}">
+    <view class="processing-header">
+      <image class="processing-icon" src="/static/icons/processing.gif" mode="aspectFit"></image>
+      <text class="processing-title">{{processingStatus}}</text>
+    </view>
+    
+    <view class="progress-bar" wx:if="{{processingProgress > 0}}">
+      <view class="progress-fill" style="width: {{processingProgress}}%"></view>
+    </view>
+    
+    <text class="processing-percent" wx:if="{{processingProgress > 0}}">{{processingProgress}}%</text>
+    <text class="processing-subtitle">正在识别语音内容，请耐心等待...</text>
+    
+    <view class="processing-actions">
+      <button class="btn-secondary" bindtap="cancelOperation">取消</button>
+    </view>
+  </view>
+
+  <!-- Success State -->
+  <view class="success-state" wx:if="{{showResult}}">
+    <image class="success-icon" src="/static/icons/success.png" mode="aspectFit"></image>
+    <text class="success-title">翻译完成!</text>
+    <text class="success-subtitle">正在跳转到结果页面...</text>
+  </view>
+
+  <!-- Error State -->
+  <view class="error-state" wx:if="{{showError}}">
+    <image class="error-icon" src="/static/icons/error.png" mode="aspectFit"></image>
+    <text class="error-title">翻译失败</text>
+    <text class="error-message">{{errorMessage}}</text>
+    
+    <view class="error-actions">
+      <button class="btn-primary" bindtap="retryTranslation" wx:if="{{retryCount < maxRetries}}">
+        重试 ({{retryCount}}/{{maxRetries}})
+      </button>
+      <button class="btn-secondary" bindtap="selectNewFile">选择其他文件</button>
+    </view>
+  </view>
+
+  <!-- Upgrade Prompt Component -->
+  <upgrade-prompt 
+    show="{{showUpgradePrompt}}"
+    type="{{upgradePromptType}}"
+    quotaInfo="{{currentQuotaInfo}}"
+    bind:close="onUpgradeClose"
+    bind:upgrade="onUpgradeConfirm"
+    bind:skip="onUpgradeSkip">
+  </upgrade-prompt>
+</view>

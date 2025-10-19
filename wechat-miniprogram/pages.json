@@ -1,0 +1,96 @@
+{
+  "pages": [
+    {
+      "path": "src/pages/index/index",
+      "style": {
+        "navigationBarTitleText": "媒体翻译助手",
+        "navigationBarBackgroundColor": "#4CAF50",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#f5f5f5"
+      }
+    },
+    {
+      "path": "src/pages/upload/index",
+      "style": {
+        "navigationBarTitleText": "上传文件",
+        "navigationBarBackgroundColor": "#4CAF50",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#f5f5f5",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
+      "path": "src/pages/result/index",
+      "style": {
+        "navigationBarTitleText": "翻译结果",
+        "navigationBarBackgroundColor": "#4CAF50",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#f5f5f5"
+      }
+    },
+    {
+      "path": "src/pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "个人中心",
+        "navigationBarBackgroundColor": "#4CAF50",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#f5f5f5"
+      }
+    },
+    {
+      "path": "src/pages/history/index",
+      "style": {
+        "navigationBarTitleText": "翻译历史",
+        "navigationBarBackgroundColor": "#4CAF50",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#f5f5f5",
+        "enablePullDownRefresh": true
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "媒体翻译助手",
+    "navigationBarBackgroundColor": "#4CAF50",
+    "backgroundColor": "#f5f5f5"
+  },
+  "tabBar": {
+    "color": "#7A7E83",
+    "selectedColor": "#4CAF50",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "src/pages/index/index",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png",
+        "text": "首页"
+      },
+      {
+        "pagePath": "src/pages/upload/index",
+        "iconPath": "static/tabbar/upload.png",
+        "selectedIconPath": "static/tabbar/upload-active.png",
+        "text": "翻译"
+      },
+      {
+        "pagePath": "src/pages/history/index",
+        "iconPath": "static/tabbar/history.png",
+        "selectedIconPath": "static/tabbar/history-active.png",
+        "text": "历史"
+      },
+      {
+        "pagePath": "src/pages/profile/index",
+        "iconPath": "static/tabbar/profile.png",
+        "selectedIconPath": "static/tabbar/profile-active.png",
+        "text": "我的"
+      }
+    ]
+  },
+  "uniIdRouter": {},
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^u-(.*)": "uview-plus/components/u-$1/u-$1.vue"
+    }
+  }
+}

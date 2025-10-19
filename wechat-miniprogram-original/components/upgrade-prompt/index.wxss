@@ -1,0 +1,392 @@
+/* components/upgrade-prompt/index.wxss */
+
+/* 遮罩层 */
+.upgrade-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40rpx;
+}
+
+/* 弹窗主体 */
+.upgrade-modal {
+  background: #fff;
+  border-radius: 24rpx;
+  width: 100%;
+  max-width: 640rpx;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.3);
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(60rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 弹窗头部 */
+.modal-header {
+  padding: 40rpx 40rpx 20rpx;
+  text-align: center;
+  position: relative;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.header-icon {
+  font-size: 60rpx;
+  margin-bottom: 16rpx;
+}
+
+.header-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.close-btn {
+  position: absolute;
+  top: 30rpx;
+  right: 30rpx;
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: #f8f9fa;
+  border: none;
+  font-size: 32rpx;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* 弹窗内容 */
+.modal-content {
+  padding: 30rpx 40rpx;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 消息描述 */
+.upgrade-message {
+  text-align: center;
+  margin-bottom: 20rpx;
+}
+
+.upgrade-message text {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* 当前配额信息 */
+.current-quota {
+  background: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.quota-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.quota-value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+.quota-value.warning {
+  color: #ffa502;
+}
+
+.quota-value.critical {
+  color: #ff4757;
+}
+
+.quota-value.exhausted {
+  color: #ff4757;
+}
+
+/* 套餐容器 */
+.plans-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* 套餐项 */
+.plan-item {
+  border: 2rpx solid #e9ecef;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  position: relative;
+  transition: all 0.3s ease;
+  background: #fff;
+}
+
+.plan-item.selected {
+  border-color: #4CAF50;
+  background: #f8fff8;
+  box-shadow: 0 4rpx 12rpx rgba(76, 175, 80, 0.15);
+}
+
+.plan-item.recommended {
+  border-color: #ffa502;
+}
+
+.plan-item.recommended.selected {
+  border-color: #4CAF50;
+}
+
+/* 推荐标签 */
+.recommend-tag {
+  position: absolute;
+  top: -12rpx;
+  right: 20rpx;
+  background: linear-gradient(45deg, #ffa502, #ff6348);
+  color: white;
+  font-size: 20rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  font-weight: 600;
+}
+
+/* 套餐内容 */
+.plan-content {
+  padding-right: 60rpx;
+}
+
+/* 套餐头部 */
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.plan-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+}
+
+.price-symbol {
+  font-size: 24rpx;
+  color: #ff4757;
+  margin-right: 4rpx;
+}
+
+.price-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ff4757;
+}
+
+.price-period {
+  font-size: 20rpx;
+  color: #999;
+  margin-left: 4rpx;
+}
+
+/* 套餐配额 */
+.plan-quota {
+  margin-bottom: 16rpx;
+}
+
+.quota-text {
+  font-size: 24rpx;
+  color: #666;
+  background: #f8f9fa;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  display: inline-block;
+}
+
+/* 功能列表 */
+.plan-features {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.feature-icon {
+  font-size: 24rpx;
+  color: #4CAF50;
+  font-weight: 600;
+  width: 24rpx;
+}
+
+.feature-text {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* 选中指示器 */
+.selected-indicator {
+  position: absolute;
+  top: 50%;
+  right: 20rpx;
+  transform: translateY(-50%);
+  width: 40rpx;
+  height: 40rpx;
+  background: #4CAF50;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selected-icon {
+  color: white;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+/* 弹窗底部 */
+.modal-footer {
+  padding: 20rpx 40rpx 40rpx;
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.skip-btn {
+  flex: 1;
+  background: #f8f9fa;
+  color: #666;
+  border: 1rpx solid #dee2e6;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  padding: 24rpx;
+  height: auto;
+  line-height: 1.4;
+}
+
+.upgrade-btn {
+  flex: 2;
+  background: linear-gradient(45deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  padding: 24rpx;
+  height: auto;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.upgrade-btn.loading {
+  background: #6c757d;
+}
+
+.upgrade-btn[disabled] {
+  background: #6c757d;
+  color: #ccc;
+}
+
+.loading-icon {
+  font-size: 28rpx;
+}
+
+/* 额外信息 */
+.modal-extra {
+  padding: 0 40rpx 30rpx;
+  text-align: center;
+}
+
+.extra-text {
+  font-size: 22rpx;
+  color: #999;
+}
+
+/* 按钮点击效果 */
+.plan-item:active {
+  transform: scale(0.98);
+}
+
+.skip-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
+
+.upgrade-btn:active:not([disabled]) {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
+
+.close-btn:active {
+  opacity: 0.8;
+  transform: scale(0.9);
+}
+
+/* 响应式设计 */
+@media (max-width: 500rpx) {
+  .upgrade-mask {
+    padding: 20rpx;
+  }
+  
+  .modal-header, .modal-content, .modal-footer {
+    padding-left: 30rpx;
+    padding-right: 30rpx;
+  }
+  
+  .modal-header {
+    padding-top: 30rpx;
+  }
+  
+  .modal-footer {
+    padding-bottom: 30rpx;
+  }
+  
+  .plan-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8rpx;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .skip-btn, .upgrade-btn {
+    width: 100%;
+  }
+}

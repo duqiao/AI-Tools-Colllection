@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(.specify/scripts/powershell/setup-plan.ps1 -Json)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:juejin.cn)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:azure.microsoft.com)",
+      "WebFetch(domain:pay.weixin.qq.com)",
+      "WebFetch(domain:pay.weixin.qq.com)",
+      "WebFetch(domain:stripe.com)",
+      "WebFetch(domain:alipay.com)",
+      "Bash(SPEC_FILE=\"D:\\Python\\startup\\AI-Tools-Colllection\\specs\\002-platform-migration\\spec.md\")",
+      "Bash(echo:*)",
+      "Bash(SPEC_FILE=\"D:\\Python\\startup\\AI-Tools-Colllection\\specs\\003-miniprogram-design\\spec.md\")",
+      "WebFetch(domain:uniapp.dcloud.net.cn)",
+      "WebFetch(domain:uniapp.dcloud.io)",
+      "WebFetch(domain:www.figma.com)",
+      "WebFetch(domain:vant-contrib.gitee.io)",
+      "WebFetch(domain:uiview.com)",
+      "WebFetch(domain:www.adobe.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:developer.mozilla.org)",
+      "Bash(SPEC_FILE=\"D:\\Python\\startup\\AI-Tools-Colllection\\specs\\004-fastapi-backend\\spec.md\")",
+      "Bash(python:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(powershell:*)",
+      "Bash(mv:*)",
+      "Bash(npm install:*)",
+      "Bash(uvm:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)"
+    ],
+    "deny": []
+  }
+}

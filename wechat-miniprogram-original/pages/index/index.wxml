@@ -1,0 +1,168 @@
+<!-- pages/index/index.wxml -->
+<view class="container">
+  <!-- Header Section -->
+  <view class="header-section">
+    <view class="header-content">
+      <image class="app-logo" src="/static/icons/logo.png" mode="aspectFit"></image>
+      <text class="app-title">媒体翻译器</text>
+      <text class="app-subtitle">专业的语音识别服务</text>
+    </view>
+  </view>
+
+  <!-- User Info Section -->
+  <view class="user-section" wx:if="{{isLoggedIn && userInfo}}">
+    <view class="user-info">
+      <image class="user-avatar" src="{{userInfo.avatar_url || '/static/icons/user-default.png'}}" mode="aspectFit"></image>
+      <view class="user-details">
+        <text class="user-name">{{userInfo.username || '用户'}}</text>
+        <text class="user-plan">{{quotaInfo.plan_name || '免费版'}}</text>
+      </view>
+      <view class="user-quota">
+        <text class="quota-text">剩余 {{quotaInfo.remaining || 0}} 次</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Login Section -->
+  <view class="login-section" wx:if="{{!isLoggedIn}}">
+    <view class="login-prompt">
+      <image class="login-icon" src="/static/icons/login.png" mode="aspectFit"></image>
+      <text class="login-title">请先登录</text>
+      <text class="login-subtitle">登录后享受完整的翻译服务</text>
+      <button class="btn-primary" bindtap="handleLogin">立即登录</button>
+    </view>
+  </view>
+
+  <!-- Quick Actions Section -->
+  <view class="quick-actions" wx:if="{{isLoggedIn}}">
+    <view class="section-title">
+      <text class="title-text">快速操作</text>
+    </view>
+    
+    <view class="action-buttons">
+      <button class="btn-primary btn-large" bindtap="goToUpload">
+        <image class="btn-icon" src="/static/icons/upload.png" mode="aspectFit"></image>
+        开始翻译
+      </button>
+      
+      <view class="secondary-actions">
+        <button class="btn-secondary" bindtap="goToHistory">
+          <image class="btn-icon" src="/static/icons/history.png" mode="aspectFit"></image>
+          翻译历史
+        </button>
+        <button class="btn-secondary" bindtap="goToVip">
+          <image class="btn-icon" src="/static/icons/vip.png" mode="aspectFit"></image>
+          升级VIP
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- Recent Translations -->
+  <view class="recent-section" wx:if="{{showQuickActions && recentTranslations.length > 0}}">
+    <view class="section-title">
+      <text class="title-text">最近翻译</text>
+      <text class="title-more" bindtap="goToHistory">查看全部</text>
+    </view>
+    
+    <view class="recent-list">
+      <view 
+        class="recent-item" 
+        wx:for="{{recentTranslations}}" 
+        wx:key="id"
+        bindtap="viewTranslationDetail"
+        data-translation="{{item}}"
+      >
+        <image class="item-icon" src="/static/icons/{{item.file_type}}.png" mode="aspectFit"></image>
+        <view class="item-content">
+          <text class="item-title">{{item.original_filename || '未知文件'}}</text>
+          <text class="item-subtitle">{{item.word_count || 0}}字 · {{item.created_at}}</text>
+        </view>
+        <view class="item-status">
+          <text class="status-text">{{item.processing_status === 'completed' ? '已完成' : '处理中'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Features Section -->
+  <view class="features-section">
+    <view class="section-title">
+      <text class="title-text">功能特色</text>
+    </view>
+    
+    <view class="features-grid">
+      <view class="feature-item">
+        <image class="feature-icon" src="/static/icons/audio.png" mode="aspectFit"></image>
+        <text class="feature-title">音频翻译</text>
+        <text class="feature-desc">支持多种音频格式</text>
+      </view>
+      
+      <view class="feature-item">
+        <image class="feature-icon" src="/static/icons/video.png" mode="aspectFit"></image>
+        <text class="feature-title">视频翻译</text>
+        <text class="feature-desc">自动提取音频识别</text>
+      </view>
+      
+      <view class="feature-item">
+        <image class="feature-icon" src="/static/icons/ai.png" mode="aspectFit"></image>
+        <text class="feature-title">AI识别</text>
+        <text class="feature-desc">高精度语音识别</text>
+      </view>
+      
+      <view class="feature-item">
+        <image class="feature-icon" src="/static/icons/edit.png" mode="aspectFit"></image>
+        <text class="feature-title">结果编辑</text>
+        <text class="feature-desc">可编辑翻译结果</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Stats Section (for logged in users) -->
+  <view class="stats-section" wx:if="{{isLoggedIn}}">
+    <view class="section-title">
+      <text class="title-text">使用统计</text>
+    </view>
+    
+    <view class="stats-grid">
+      <view class="stat-item">
+        <text class="stat-number">{{quotaInfo.total_translations || 0}}</text>
+        <text class="stat-label">总翻译次数</text>
+      </view>
+      
+      <view class="stat-item">
+        <text class="stat-number">{{quotaInfo.completed_translations || 0}}</text>
+        <text class="stat-label">成功翻译</text>
+      </view>
+      
+      <view class="stat-item">
+        <text class="stat-number">{{quotaInfo.success_rate || 0}}%</text>
+        <text class="stat-label">成功率</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Upgrade Prompt -->
+  <view class="upgrade-section" wx:if="{{quotaInfo && quotaInfo.remaining <= 0}}">
+    <view class="upgrade-prompt">
+      <image class="upgrade-icon" src="/static/icons/upgrade.png" mode="aspectFit"></image>
+      <text class="upgrade-title">翻译次数已用完</text>
+      <text class="upgrade-desc">升级到VIP获得更多翻译机会</text>
+      <button class="btn-primary" bindtap="goToVip">立即升级</button>
+    </view>
+  </view>
+
+  <!-- Footer Section -->
+  <view class="footer-section">
+    <view class="footer-links">
+      <text class="footer-link" bindtap="showFeatures">功能介绍</text>
+      <text class="footer-link" bindtap="showHelp">使用帮助</text>
+      <text class="footer-link" bindtap="showAbout">关于我们</text>
+    </view>
+    
+    <view class="footer-info">
+      <text class="version-text">版本 {{appVersion}}</text>
+      <text class="copyright-text">© 2024 媒体翻译器</text>
+    </view>
+  </view>
+</view>

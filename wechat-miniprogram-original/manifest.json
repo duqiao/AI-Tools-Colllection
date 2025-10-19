@@ -1,0 +1,50 @@
+{
+  "description": "WeChat Media Translator Mini-Program",
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "file",
+        "value": ".eslintrc.js"
+      },
+      {
+        "type": "file",
+        "value": ".gitignore"
+      },
+      {
+        "type": "file",
+        "value": "README.md"
+      },
+      {
+        "type": "file",
+        "value": "yarn.lock"
+      },
+      {
+        "type": "file",
+        "value": "package-lock.json"
+      },
+      {
+        "type": "file",
+        "value": ".project.json"
+      }
+    ]
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "newFeature": false,
+    "autoAudits": false
+  },
+  "compileType": "miniprogram",
+  "libVersion": "2.19.4",
+  "appid": "__UNI__YOUR_APP_ID",
+  "projectname": "wechat-media-translator",
+  "debug": true,
+  "scripts": {},
+  "condition": {
+    "miniprogram": {
+      "list": []
+    }
+  }
+}

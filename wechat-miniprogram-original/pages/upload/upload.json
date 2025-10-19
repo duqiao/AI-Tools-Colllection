@@ -1,0 +1,11 @@
+{
+  "navigationBarTitleText": "上传文件",
+  "navigationBarBackgroundColor": "#4CAF50",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#f5f5f5",
+  "enablePullDownRefresh": false,
+  "usingComponents": {
+    "quota-display": "../../components/quota-display/index",
+    "upgrade-prompt": "../../components/upgrade-prompt/index"
+  }
+}

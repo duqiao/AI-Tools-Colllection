@@ -1,0 +1,24 @@
+{
+  "name": "wechat-media-translator",
+  "version": "1.0.0",
+  "description": "Cross-platform media translation mini-program",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.3.4",
+    "pinia": "^2.1.6",
+    "vue-router": "^4.2.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.9",
+    "typescript": "^5.1.6",
+    "vue-tsc": "^1.8.8",
+    "@types/node": "^20.5.0"
+  }
+}
