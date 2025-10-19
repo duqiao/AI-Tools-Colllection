@@ -53,7 +53,7 @@ class Translation(Base):
     quota_deducted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata (stored as JSON)
-    metadata = Column(Text, nullable=True)
+    translation_metadata = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

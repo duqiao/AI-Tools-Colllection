@@ -1,127 +1,147 @@
 <template>
-  <div class="container">
-    <div class="header-section">
-      <div class="header-content">
-        <div class="app-logo">
-          <div class="logo-emoji">🎵</div>
-        </div>
-        <div class="app-title">媒体翻译助手</div>
-        <div class="app-subtitle">专业的语音识别服务</div>
-      </div>
-    </div>
-
-    <!-- User Section -->
-    <div v-if="userStore.isLoggedIn" class="user-section">
-      <div class="user-info">
-        <div class="user-avatar">👤</div>
-        <div class="user-details">
-          <div class="user-name">{{ userStore.userInfo?.username || '用户' }}</div>
-          <div class="user-plan">
-            <span class="plan-text">{{ userStore.subscriptionLevel || '免费版' }}</span>
+  <div class="ai-tools-container">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-time">{{ currentTime }}</div>
+      <div class="status-indicators">
+        <div class="battery-indicator">
+          <div class="battery-outer">
+            <div class="battery-inner"></div>
           </div>
         </div>
       </div>
-      
-      <!-- Quota Display Component -->
-      <QuotaDisplay 
-        @upgrade="onQuotaUpgrade"
-        @details="onQuotaDetails"
-      />
     </div>
 
-    <!-- Login Section -->
-    <div v-else class="login-section">
-      <div class="login-prompt">
-        <div class="login-icon">🔐</div>
-        <div class="login-title">欢迎使用媒体翻译器</div>
-        <div class="login-subtitle">请先登录以使用完整功能</div>
-        <button class="login-btn" @click="handleLogin">
-          微信登录
+    <!-- Header Icons -->
+    <div class="header-icons">
+      <button class="header-icon-btn" @click="showMenu">
+        <div class="menu-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </button>
+      <button class="header-icon-btn" @click="showProfile">
+        <div class="profile-circle">
+          <div class="profile-inner"></div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Title -->
+    <div class="title-section">
+      <h1 class="main-title">AI语音视频工具</h1>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="info-banner">
+      <div class="banner-icon">🔊</div>
+      <p class="banner-text">本工具，升级套餐解锁更多权限</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Feature Cards -->
+      <div class="feature-cards">
+        <div 
+          v-for="feature in mainFeatures" 
+          :key="feature.id"
+          class="feature-card"
+          @click="handleFeatureClick(feature)"
+        >
+          <div class="feature-icon-container" :class="feature.iconBg">
+            <div class="feature-icon">{{ feature.icon }}</div>
+          </div>
+          <div class="feature-content">
+            <div class="feature-header">
+              <h3 class="feature-title">{{ feature.title }}</h3>
+              <span v-if="feature.badge" class="feature-badge" :class="feature.badgeClass">
+                {{ feature.badge }}
+              </span>
+            </div>
+            <p class="feature-description">{{ feature.description }}</p>
+          </div>
+          <div class="feature-arrow">›</div>
+        </div>
+      </div>
+
+      <!-- Bottom Feature Grid -->
+      <div class="bottom-features">
+        <div 
+          v-for="feature in bottomFeatures" 
+          :key="feature.id"
+          class="bottom-feature-card"
+          @click="handleFeatureClick(feature)"
+        >
+          <div class="bottom-feature-icon-container" :class="feature.iconBg">
+            <div class="bottom-feature-icon">{{ feature.icon }}</div>
+          </div>
+          <h3 class="bottom-feature-title">{{ feature.title }}</h3>
+          <div class="bottom-feature-desc">
+            <span>{{ feature.description }}</span>
+            <span class="bottom-feature-arrow">›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA Button -->
+      <div class="cta-section">
+        <button class="cta-button" @click="showToolKit">
+          <div class="cta-content">
+            <div class="cta-icon">💼</div>
+            <span class="cta-text">超全工具包！神器汇总！</span>
+          </div>
+          <div class="cta-go">
+            <span>GO</span>
+          </div>
         </button>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <p class="footer-text">©河南省云助手信息科技有限公司</p>
       </div>
     </div>
 
-    <!-- Quick Actions -->
-    <div v-if="userStore.isLoggedIn" class="quick-actions">
-      <div class="section-title">
-        <span class="title-text">快速操作</span>
-        <span class="title-more">查看全部</span>
-      </div>
-      
-      <div class="action-buttons">
-        <button class="btn-primary btn-large" @click="goToUpload">
-          <div class="btn-icon">🎤</div>
-          开始翻译
-        </button>
-      </div>
-
-      <div class="secondary-actions">
-        <button class="btn-secondary" @click="goToHistory">
-          <div class="btn-icon">📝</div>
-          翻译历史
-        </button>
-        <button class="btn-secondary" @click="goToVip">
-          <div class="btn-icon">💎</div>
-          升级VIP
-        </button>
-      </div>
+    <!-- Bottom Navigation -->
+    <div class="bottom-navigation">
+      <button 
+        v-for="tab in bottomTabs" 
+        :key="tab.id"
+        class="nav-tab"
+        :class="{ active: currentTab === tab.id }"
+        @click="switchTab(tab.id)"
+      >
+        <div class="nav-icon" :class="{ active: currentTab === tab.id }">
+          {{ tab.icon }}
+        </div>
+        <span class="nav-text" :class="{ active: currentTab === tab.id }">
+          {{ tab.text }}
+        </span>
+      </button>
     </div>
 
-    <!-- Features Section -->
-    <div class="features-section">
-      <div class="section-title">
-        <span class="title-text">功能特色</span>
-      </div>
-      
-      <div class="features-grid">
-        <div class="feature-item" @click="showFeatures">
-          <div class="feature-icon">🎵</div>
-          <div class="feature-title">多格式支持</div>
-          <div class="feature-desc">支持音频、视频等多种格式</div>
-        </div>
-        
-        <div class="feature-item" @click="showFeatures">
-          <div class="feature-icon">🎯</div>
-          <div class="feature-title">高质量识别</div>
-          <div class="feature-desc">专业AI语音识别技术</div>
-        </div>
-        
-        <div class="feature-item" @click="showFeatures">
-          <div class="feature-icon">⚡</div>
-          <div class="feature-title">快速处理</div>
-          <div class="feature-desc">5-10秒完成识别</div>
-        </div>
-        
-        <div class="feature-item" @click="showFeatures">
-          <div class="feature-icon">✏️</div>
-          <div class="feature-title">结果编辑</div>
-          <div class="feature-desc">支持文本编辑和分享</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer-section">
-      <div class="footer-links">
-        <span class="footer-link" @click="showHelp">使用帮助</span>
-        <span class="footer-link" @click="showAbout">关于我们</span>
-        <span class="footer-link" @click="checkUpdate">检查更新</span>
-      </div>
-      <div class="footer-info">
-        <span class="version-text">v{{ appVersion }}</span>
-        <span class="copyright-text">© 2024 媒体翻译器</span>
-      </div>
+    <!-- Android Navigation Bar -->
+    <div class="android-nav">
+      <button class="android-nav-btn" @click="showMenu">
+        <div class="android-icon">☰</div>
+      </button>
+      <button class="android-nav-btn" @click="handleHome">
+        <div class="android-icon">◻</div>
+      </button>
+      <button class="android-nav-btn" @click="goBack">
+        <div class="android-icon">‹</div>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useTranslationStore } from '@/stores/translation'
 import type { TranslationTask } from '@/types'
 import { uni } from '@/utils/uni-adapter'
-import QuotaDisplay from '@/components/quota-display/index.vue'
 
 // Stores
 const userStore = useUserStore()
@@ -130,6 +150,82 @@ const translationStore = useTranslationStore()
 // Reactive data
 const appVersion = ref('1.0.0')
 const recentTranslations = ref<TranslationTask[]>([])
+const currentTime = ref('')
+const currentTab = ref('home')
+let timeInterval: number | null = null
+
+// Feature data from Figma design
+const mainFeatures = ref([
+  {
+    id: 1,
+    icon: '🎤',
+    iconBg: 'bg-green-500',
+    title: '实时语音转文字',
+    description: '实时录音同步生成文字',
+    badge: '高级功能',
+    badgeClass: 'badge-default'
+  },
+  {
+    id: 2,
+    icon: '🎧',
+    iconBg: 'bg-blue-500',
+    title: '音频转文字',
+    description: '请将音频文件发送至微信文件传输助手',
+    badge: null
+  },
+  {
+    id: 3,
+    icon: '🎬',
+    iconBg: 'bg-purple-500',
+    title: '视频转文字',
+    description: '上传视频转换文字',
+    badge: null
+  },
+  {
+    id: 4,
+    icon: '📹',
+    iconBg: 'bg-blue-400',
+    title: '视频写文案提取',
+    description: '转发视频号视频提取文字',
+    badge: '新',
+    badgeClass: 'badge-destructive'
+  }
+])
+
+const bottomFeatures = ref([
+  {
+    id: 5,
+    icon: '🔗',
+    iconBg: 'bg-orange-500',
+    title: '链接转文字',
+    description: '从链接提'
+  },
+  {
+    id: 6,
+    icon: '🖼️',
+    iconBg: 'bg-cyan-400',
+    title: '图片转文字',
+    description: '上传图片'
+  }
+])
+
+const bottomTabs = ref([
+  {
+    id: 'home',
+    icon: '🏠',
+    text: '语音转文字'
+  },
+  {
+    id: 'history',
+    icon: '📄',
+    text: '识别记录'
+  },
+  {
+    id: 'profile',
+    icon: '👤',
+    text: '我的'
+  }
+])
 
 // Computed
 const isLoggedIn = computed(() => userStore.isLoggedIn)
@@ -138,6 +234,14 @@ const isLoggedIn = computed(() => userStore.isLoggedIn)
 onMounted(() => {
   console.log('Index page mounted')
   initializePage()
+  updateCurrentTime()
+  timeInterval = setInterval(updateCurrentTime, 1000)
+})
+
+onUnmounted(() => {
+  if (timeInterval) {
+    clearInterval(timeInterval)
+  }
 })
 
 onActivated(() => {
@@ -146,6 +250,15 @@ onActivated(() => {
 })
 
 // Methods
+function updateCurrentTime() {
+  const now = new Date()
+  currentTime.value = now.toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  })
+}
+
 async function initializePage() {
   await userStore.checkLoginStatus()
   await loadRecentTranslations()
@@ -165,29 +278,110 @@ async function loadRecentTranslations() {
   }
 }
 
-function handleLogin() {
-  uni.showModal({
-    title: '微信登录',
-    content: '将使用微信账号登录',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await userStore.login({
-            code: 'mock-code',
-            userInfo: { nickName: '测试用户' }
-          })
-          uni.showToast({
-            title: '登录成功',
-            icon: 'success'
-          })
-        } catch (error) {
-          uni.showToast({
-            title: '登录失败',
-            icon: 'none'
-          })
-        }
+function handleFeatureClick(feature: any) {
+  console.log('Feature clicked:', feature.title)
+  
+  // Handle different features based on their type
+  switch (feature.id) {
+    case 1: // 实时语音转文字
+      uni.showToast({
+        title: '开启实时录音',
+        icon: 'none'
+      })
+      break
+    case 2: // 音频转文字
+      goToUpload()
+      break
+    case 3: // 视频转文字
+      goToUpload()
+      break
+    case 4: // 视频写文案提取
+      uni.showToast({
+        title: '视频文案提取',
+        icon: 'none'
+      })
+      break
+    case 5: // 链接转文字
+      uni.showToast({
+        title: '链接解析功能',
+        icon: 'none'
+      })
+      break
+    case 6: // 图片转文字
+      uni.showToast({
+        title: '图片文字识别',
+        icon: 'none'
+      })
+      break
+  }
+}
+
+function showMenu() {
+  uni.showActionSheet({
+    itemList: ['设置', '帮助中心', '关于我们', '意见反馈'],
+    success: (res) => {
+      switch (res.tapIndex) {
+        case 0:
+          showSettings()
+          break
+        case 1:
+          showHelp()
+          break
+        case 2:
+          showAbout()
+          break
+        case 3:
+          showFeedback()
+          break
       }
     }
+  })
+}
+
+function showProfile() {
+  uni.navigateTo({
+    url: '/pages/profile/index'
+  })
+}
+
+function showToolKit() {
+  uni.showModal({
+    title: '工具包',
+    content: '完整的AI工具集合，包含语音转文字、视频转文字、图片识别等多种功能',
+    showCancel: false,
+    confirmText: '了解详情'
+  })
+}
+
+function switchTab(tabId: string) {
+  currentTab.value = tabId
+  console.log('Switched to tab:', tabId)
+  
+  switch (tabId) {
+    case 'home':
+      // Already on home page
+      break
+    case 'history':
+      uni.navigateTo({
+        url: '/pages/history/index'
+      })
+      break
+    case 'profile':
+      uni.navigateTo({
+        url: '/pages/profile/index'
+      })
+      break
+  }
+}
+
+function handleHome() {
+  // Already on home page, just refresh
+  refreshData()
+}
+
+function goBack() {
+  uni.navigateBack({
+    delta: 1
   })
 }
 
@@ -209,9 +403,9 @@ function goToVip() {
   })
 }
 
-function showFeatures() {
+function showSettings() {
   uni.showToast({
-    title: '功能展示',
+    title: '设置功能',
     icon: 'none'
   })
 }
@@ -230,6 +424,13 @@ function showAbout() {
   })
 }
 
+function showFeedback() {
+  uni.showToast({
+    title: '意见反馈',
+    icon: 'none'
+  })
+}
+
 function checkUpdate() {
   uni.showToast({
     title: '已是最新版本',
@@ -237,20 +438,11 @@ function checkUpdate() {
   })
 }
 
-function onQuotaUpgrade(quotaInfo: any) {
-  console.log('Upgrade requested:', quotaInfo)
-  goToVip()
-}
-
-function onQuotaDetails(quotaInfo: any) {
-  console.log('Details requested:', quotaInfo)
-}
-
 // Share functions
 function onShareAppMessage() {
   return {
-    title: '媒体翻译器 - 语音识别转文字',
-    desc: '专业的语音识别服务，支持多种音频视频格式',
+    title: 'AI语音视频工具 - 专业语音识别服务',
+    desc: '支持语音转文字、视频转文字、图片识别等多种功能',
     path: '/pages/index/index',
     imageUrl: '/static/images/share-app.png'
   }
@@ -258,8 +450,8 @@ function onShareAppMessage() {
 
 function onShareTimeline() {
   return {
-    title: '媒体翻译器 - 专业语音识别服务',
-    desc: '支持多种格式，高精度识别',
+    title: 'AI语音视频工具',
+    desc: '专业的AI语音视频处理工具',
     imageUrl: '/static/images/share-app.png'
   }
 }
@@ -272,11 +464,503 @@ defineExpose({
 </script>
 
 <style>
-/* Import existing styles from original index.wxss */
-.container {
+/* Figma Design Styles - AI Voice Video Tools */
+.ai-tools-container {
   min-height: 100vh;
-  background: #f5f5f5;
-  padding-bottom: 100rpx;
+  background: linear-gradient(135deg, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Status Bar */
+.status-bar {
+  padding: 12rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #374151;
+  font-size: 24rpx;
+}
+
+.status-time {
+  font-weight: 500;
+}
+
+.status-indicators {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.battery-indicator {
+  width: 32rpx;
+  height: 24rpx;
+  border: 2rpx solid #374151;
+  border-radius: 4rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.battery-inner {
+  width: 16rpx;
+  height: 12rpx;
+  background: #374151;
+  border-radius: 2rpx;
+}
+
+/* Header Icons */
+.header-icons {
+  padding: 0 24rpx;
+  display: flex;
+  justify-content: flex-end;
+  gap: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.header-icon-btn {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  backdrop-filter: blur(10rpx);
+}
+
+.menu-dots {
+  display: flex;
+  gap: 4rpx;
+}
+
+.dot {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: #374151;
+}
+
+.profile-circle {
+  width: 40rpx;
+  height: 40rpx;
+  border: 4rpx solid #374151;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-inner {
+  width: 16rpx;
+  height: 16rpx;
+  border: 4rpx solid #374151;
+  border-radius: 50%;
+}
+
+/* Title */
+.title-section {
+  text-align: center;
+  margin-bottom: 48rpx;
+}
+
+.main-title {
+  color: #2563eb;
+  font-size: 48rpx;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Info Banner */
+.info-banner {
+  padding: 0 24rpx;
+  margin-bottom: 32rpx;
+}
+
+.info-banner {
+  background: #fef3c7;
+  border-radius: 9999rpx;
+  padding: 24rpx 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.banner-icon {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+}
+
+.banner-text {
+  color: #374151;
+  font-size: 28rpx;
+  margin: 0;
+  flex: 1;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 0 24rpx 256rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+/* Feature Cards */
+.feature-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10rpx);
+  border-radius: 48rpx;
+  padding: 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.feature-card:hover {
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+  transform: translateY(-2rpx);
+}
+
+.feature-icon-container {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-icon {
+  font-size: 56rpx;
+  color: white;
+}
+
+.feature-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.feature-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 8rpx;
+}
+
+.feature-title {
+  color: #111827;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin: 0;
+}
+
+.feature-badge {
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 16rpx;
+  font-weight: 500;
+}
+
+.badge-default {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.badge-destructive {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.feature-description {
+  color: #6b7280;
+  font-size: 28rpx;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.feature-arrow {
+  color: #9ca3af;
+  font-size: 40rpx;
+  flex-shrink: 0;
+}
+
+/* Bottom Features Grid */
+.bottom-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32rpx;
+}
+
+.bottom-feature-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10rpx);
+  border-radius: 48rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+  text-align: left;
+}
+
+.bottom-feature-card:hover {
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+  transform: translateY(-2rpx);
+}
+
+.bottom-feature-icon-container {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+
+.bottom-feature-icon {
+  font-size: 48rpx;
+  color: white;
+}
+
+.bottom-feature-title {
+  color: #111827;
+  font-size: 28rpx;
+  font-weight: 600;
+  margin: 0 0 8rpx 0;
+}
+
+.bottom-feature-desc {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+}
+
+.bottom-feature-arrow {
+  color: #9ca3af;
+  font-size: 32rpx;
+}
+
+/* CTA Section */
+.cta-section {
+  padding-top: 32rpx;
+}
+
+.cta-button {
+  width: 100%;
+  background: linear-gradient(135deg, #4ade80 0%, #06b6d4 100%);
+  border-radius: 9999rpx;
+  padding: 32rpx 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.cta-button:hover {
+  box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.2);
+  transform: translateY(-2rpx);
+}
+
+.cta-content {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.cta-icon {
+  font-size: 48rpx;
+  color: white;
+}
+
+.cta-text {
+  color: white;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.cta-go {
+  background: #67e8f9;
+  border-radius: 9999rpx;
+  width: 96rpx;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding-top: 32rpx;
+}
+
+.footer-text {
+  color: #6b7280;
+  font-size: 20rpx;
+  margin: 0;
+}
+
+/* Bottom Navigation */
+.bottom-navigation {
+  position: fixed;
+  bottom: 96rpx;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  border-top: 1rpx solid #e5e7eb;
+}
+
+.bottom-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 24rpx 0;
+}
+
+.nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  background: none;
+  border: none;
+  padding: 8rpx 16rpx;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-icon {
+  font-size: 48rpx;
+  color: #9ca3af;
+}
+
+.nav-icon.active {
+  color: #2563eb;
+}
+
+.nav-text {
+  font-size: 20rpx;
+  color: #9ca3af;
+}
+
+.nav-text.active {
+  color: #2563eb;
+}
+
+/* Android Navigation Bar */
+.android-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10rpx);
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.android-nav-btn {
+  background: none;
+  border: none;
+  padding: 16rpx;
+  cursor: pointer;
+}
+
+.android-icon {
+  font-size: 48rpx;
+  color: #4b5563;
+}
+
+/* Color classes for icon backgrounds */
+.bg-green-500 {
+  background: #10b981;
+}
+
+.bg-blue-500 {
+  background: #3b82f6;
+}
+
+.bg-purple-500 {
+  background: #8b5cf6;
+}
+
+.bg-blue-400 {
+  background: #60a5fa;
+}
+
+.bg-orange-500 {
+  background: #f97316;
+}
+
+.bg-cyan-400 {
+  background: #22d3ee;
+}
+
+/* Responsive Design */
+@media (max-width: 750rpx) {
+  .bottom-features {
+    grid-template-columns: 1fr;
+    gap: 24rpx;
+  }
+  
+  .feature-card {
+    padding: 24rpx;
+    gap: 24rpx;
+  }
+  
+  .feature-icon-container {
+    width: 96rpx;
+    height: 96rpx;
+  }
+  
+  .main-title {
+    font-size: 40rpx;
+  }
+}
+
+/* Button active states */
+.header-icon-btn:active,
+.feature-card:active,
+.bottom-feature-card:active,
+.cta-button:active,
+.nav-tab:active,
+.android-nav-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
 }
 
 .header-section {

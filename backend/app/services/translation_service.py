@@ -15,7 +15,7 @@ from pathlib import Path
 
 from app.models.translation import Translation
 from app.models.user import User
-from app.models.usage_record import UsageRecord
+from app.models.subscription import UsageRecord
 from app.core.logging import get_logger
 from app.services.speech_service import SpeechService, SpeechProvider
 from app.utils.audio_extractor import AudioExtractor

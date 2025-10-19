@@ -35,7 +35,13 @@
       "Bash(npm install:*)",
       "Bash(uvm:*)",
       "Bash(npm run dev:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(docker-compose:*)",
+      "Bash(pip install:*)",
+      "Bash(py -m pip install:*)",
+      "Bash(py -m uvicorn:*)",
+      "Bash(start-server.bat)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

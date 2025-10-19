@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: wechat-translator-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wechat_translator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - wechat-translator-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: wechat-translator-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - wechat-translator-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # FastAPI Backend (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wechat-translator-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/wechat_translator
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3007,http://127.0.0.1:3000,http://127.0.0.1:3007
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wechat-translator-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend (Vue 3 Development)
+  frontend:
+    build:
+      context: ./wechat-miniprogram
+      dockerfile: Dockerfile
+    container_name: wechat-translator-frontend
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    volumes:
+      - ./wechat-miniprogram:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - wechat-translator-network
+    command: npm run dev -- --host 0.0.0.0 --port 3007
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  wechat-translator-network:
+    driver: bridge
