@@ -345,10 +345,11 @@ function confirmUpgrade(planData: any) {
 </script>
 
 <style>
-/* pages/upload/index.wxss */
+/* Upload Page - Figma Design Styles */
 .upload-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(to bottom right, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  padding: 24rpx;
   padding-bottom: 40rpx;
 }
 
@@ -470,14 +471,14 @@ function confirmUpgrade(planData: any) {
 }
 
 .progress-fill {
-  background: linear-gradient(90deg, #4CAF50, #45a049);
+  background: linear-gradient(to right, #4ade80 0%, #06b6d4 100%);
   height: 100%;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 24rpx;
-  color: #4CAF50;
+  color: #22c55e;
   text-align: center;
   display: block;
 }
@@ -521,13 +522,14 @@ function confirmUpgrade(planData: any) {
 .choose-btn,
 .upload-btn {
   flex: 1;
-  background: linear-gradient(45deg, #4CAF50, #45a049);
+  background: linear-gradient(to right, #4ade80 0%, #06b6d4 100%);
   color: white;
   border: none;
   border-radius: 12rpx;
   font-size: 28rpx;
   font-weight: 500;
   padding: 24rpx;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .choose-btn:active,

@@ -455,15 +455,16 @@ function confirmUpgrade(planData: any) {
 </script>
 
 <style>
-/* pages/profile/index.wxss */
+/* Profile Page - Figma Design Styles */
 .profile-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(to bottom right, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  padding: 24rpx;
   padding-bottom: 40rpx;
 }
 
 .nav-header {
-  background: linear-gradient(135deg, #4CAF50, #45a049);
+  background: linear-gradient(to right, #4ade80 0%, #06b6d4 100%);
   padding: 20rpx 32rpx 40rpx;
 }
 

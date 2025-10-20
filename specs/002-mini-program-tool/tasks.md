@@ -120,15 +120,15 @@ description: "Task list template for feature implementation"
 
 ### Frontend Implementation for User Story 1
 
-- [ ] T054 [P] [US1] Create media upload page in frontend/pages/upload/index.vue
-- [ ] T055 [P] [US1] Create file selection component in frontend/components/file-uploader/index.vue
-- [ ] T056 [P] [US1] Create upload progress component in frontend/components/upload-progress/index.vue
-- [ ] T057 [P] [US1] Create translation result page in frontend/pages/result/index.vue
-- [ ] T058 [US1] Implement media upload API calls in frontend/services/api.ts
-- [ ] T059 [US1] Implement translation status polling in frontend/services/translation-service.ts
-- [ ] T060 [US1] Add navigation between upload and result pages
-- [ ] T061 [US1] Implement error handling and user feedback
-- [ ] T062 [US1] Test cross-platform compatibility (WeChat, H5, mobile)
+- [X] T054 [P] [US1] Create media upload page in frontend/pages/upload/index.vue
+- [X] T055 [P] [US1] Create file selection component in frontend/components/file-uploader/index.vue
+- [X] T056 [P] [US1] Create upload progress component in frontend/components/upload-progress/index.vue
+- [X] T057 [P] [US1] Create translation result page in frontend/pages/result/index.vue
+- [X] T058 [US1] Implement media upload API calls in frontend/services/api.ts
+- [X] T059 [US1] Implement translation status polling in frontend/services/translation-service.ts
+- [X] T060 [US1] Add navigation between upload and result pages
+- [X] T061 [US1] Implement error handling and user feedback
+- [X] T062 [US1] Test cross-platform compatibility (WeChat, H5, mobile)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -142,28 +142,28 @@ description: "Task list template for feature implementation"
 
 ### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
 
-- [ ] T063 [P] [US2] Contract test for FastAPI endpoints in tests/contract/test-fastapi-api.py
-- [ ] T064 [P] [US2] Integration test for backend migration in tests/integration/test-backend-migration.py
+- [X] T063 [P] [US2] Contract test for FastAPI endpoints in tests/contract/test-fastapi-api.py
+- [X] T064 [P] [US2] Integration test for backend migration in tests/integration/test-backend-migration.py
 
 ### Backend Implementation for User Story 2
 
-- [ ] T065 [P] [US2] Migrate user management endpoints to FastAPI
-- [ ] T066 [US2] Implement quota management API endpoints
-- [ ] T067 [US2] Migrate subscription management to FastAPI
-- [ ] T068 [US2] Implement payment processing endpoints
-- [ ] T069 [US2] Create API compatibility layer for frontend migration
-- [ ] T070 [US2] Implement data migration scripts from Node.js to FastAPI
-- [ ] T071 [US2] Setup database schema and migrations
-- [ ] T072 [US2] Implement comprehensive error handling
-- [ ] T073 [US2] Add API documentation with OpenAPI/Swagger
+- [X] T065 [P] [US2] Migrate user management endpoints to FastAPI
+- [X] T066 [US2] Implement quota management API endpoints
+- [X] T067 [US2] Migrate subscription management to FastAPI
+- [X] T068 [US2] Implement payment processing endpoints
+- [X] T069 [US2] Create API compatibility layer for frontend migration
+- [X] T070 [US2] Implement data migration scripts from Node.js to FastAPI
+- [X] T071 [US2] Setup database schema and migrations
+- [X] T072 [US2] Implement comprehensive error handling
+- [X] T073 [US2] Add API documentation with OpenAPI/Swagger
 
 ### Frontend Integration for User Story 2
 
-- [ ] T074 [P] [US2] Update API client to work with FastAPI backend
-- [ ] T075 [US2] Test all existing functionality with new backend
-- [ ] T076 [US2] Handle API response format differences
-- [ ] T077 [US2] Update authentication flow for FastAPI
-- [ ] T078 [US2] Validate data migration completeness
+- [X] T074 [P] [US2] Update API client to work with FastAPI backend
+- [X] T075 [US2] Test all existing functionality with new backend
+- [X] T076 [US2] Handle API response format differences
+- [X] T077 [US2] Update authentication flow for FastAPI
+- [X] T078 [US2] Validate data migration completeness
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 

@@ -232,8 +232,10 @@ test-reports/
 *.sqlite3
 *.db
 
-# Node.js / uni-app frontend
-wechat-miniprogram/node_modules/
+# Node.js / uni-app frontend - Complete module ignore
+node_modules/
+**/node_modules/
+**/node_modules/**/*
 wechat-miniprogram/dist/
 wechat-miniprogram/build/
 wechat-miniprogram/unpackage/
@@ -256,3 +258,21 @@ wechat-miniprogram/.vite/
 # WeChat mini-program specific
 wechat-miniprogram/miniprogram_npm/
 wechat-miniprogram/project.private.config.json
+
+# Complete module directory ignores (entire folders)
+# /react-native-app/
+/react-native-app/node_modules/**/*
+/figma-design/
+/wechat-miniprogram-original/
+/wechat-miniprogram/
+/specs/
+/logs/
+/temp/
+/uploads/
+
+# Backend specific files
+backend/logs/
+backend/test*.db
+backend/test*.sqlite*
+backend/migration.log
+backend/validation.log

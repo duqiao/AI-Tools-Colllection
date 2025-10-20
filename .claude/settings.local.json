@@ -41,7 +41,18 @@
       "Bash(py -m pip install:*)",
       "Bash(py -m uvicorn:*)",
       "Bash(start-server.bat)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm init:*)",
+      "Bash($env:SPECIFY_FEATURE=\"002-mini-program-tool\")",
+      "Bash(export:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run start:*)",
+      "Bash(npx:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm start:*)",
+      "Bash(cp:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

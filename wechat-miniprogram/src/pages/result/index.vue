@@ -129,6 +129,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTranslationStore } from '@/stores/translation'
 import { useUserStore } from '@/stores/user'
 import { translationApi, apiUtils } from '@/api'
+import { useTranslationStatus } from '@/services/translation-service'
 import type { TranslationTask } from '@/types'
 import { uni } from '@/utils/uni-adapter'
 
@@ -141,24 +142,39 @@ const props = defineProps<{
 const translationStore = useTranslationStore()
 const userStore = useUserStore()
 
+// Translation status service
+const { 
+  currentTask: serviceTask,
+  isPolling,
+  pollingProgress,
+  pollingMessage,
+  pollingError,
+  startPolling,
+  stopPolling
+} = useTranslationStatus()
+
 // Reactive data
 const loading = ref(true)
 const error = ref<string | null>(null)
 const currentTask = ref<TranslationTask | null>(null)
 const taskId = ref<string>(props.task_id || '')
 const showShareModal = ref(false)
-const pollingInterval = ref<number | null>(null)
 
 // Computed
 const isCompleted = computed(() => {
-  return currentTask.value?.processing_status === 'completed'
+  return currentTask.value?.processing_status === 'completed' || serviceTask.value?.status === 'completed'
 })
 
 const progressPercentage = computed(() => {
-  return currentTask.value?.progress_percentage || 0
+  return currentTask.value?.progress_percentage || pollingProgress.value || 0
 })
 
 const loadingText = computed(() => {
+  // 使用轮询服务的消息，如果没有则使用默认逻辑
+  if (pollingMessage.value) {
+    return pollingMessage.value
+  }
+  
   if (!currentTask.value) return '加载中...'
   
   switch (currentTask.value.processing_status) {
@@ -179,7 +195,7 @@ const loadingText = computed(() => {
 onMounted(() => {
   if (taskId.value) {
     loadTaskResult()
-    startStatusPolling()
+    startAdvancedPolling()
   } else {
     // 从页面参数获取task_id
     const pages = getCurrentPages()
@@ -189,7 +205,7 @@ onMounted(() => {
     if (options.task_id) {
       taskId.value = options.task_id
       loadTaskResult()
-      startStatusPolling()
+      startAdvancedPolling()
     } else {
       error.value = '未找到翻译任务'
       loading.value = false
@@ -198,7 +214,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopStatusPolling()
+  stopPolling()
 })
 
 // Methods
@@ -211,37 +227,47 @@ async function loadTaskResult() {
     
     if (response.processing_status === 'completed') {
       loading.value = false
-      stopStatusPolling()
     } else if (response.processing_status === 'failed') {
       error.value = response.processing_error || '翻译失败'
       loading.value = false
-      stopStatusPolling()
     }
   } catch (error) {
     console.error('Load task result error:', error)
     error.value = error.message || '加载结果失败'
     loading.value = false
-    stopStatusPolling()
   }
 }
 
-function startStatusPolling() {
-  if (pollingInterval.value) return
-
-  pollingInterval.value = setInterval(async () => {
-    try {
-      await loadTaskResult()
-    } catch (error) {
-      console.error('Status polling error:', error)
+function startAdvancedPolling() {
+  if (!taskId.value) return
+  
+  startPolling({
+    taskId: taskId.value,
+    interval: 2000, // 2秒轮询一次
+    timeout: 10 * 60 * 1000, // 10分钟超时
+    onProgress: (progress, message) => {
+      console.log(`Translation progress: ${progress}% - ${message}`)
+    },
+    onSuccess: (result) => {
+      console.log('Translation completed:', result)
+      currentTask.value = result
+      loading.value = false
+    },
+    onError: (error) => {
+      console.error('Translation failed:', error)
+      error.value = error.message
+      loading.value = false
+    },
+    onTimeout: () => {
+      console.log('Translation timeout')
+      error.value = '翻译超时，请重试'
+      loading.value = false
     }
-  }, 3000) // 3秒轮询一次
-}
-
-function stopStatusPolling() {
-  if (pollingInterval.value) {
-    clearInterval(pollingInterval.value)
-    pollingInterval.value = null
-  }
+  }).catch((error) => {
+    console.error('Polling error:', error)
+    error.value = error.message || '轮询状态失败'
+    loading.value = false
+  })
 }
 
 function goBack() {
@@ -269,7 +295,7 @@ function retryTranslation() {
           language: 'zh-CN',
           provider: 'alibaba'
         }).then(() => {
-          startStatusPolling()
+          startAdvancedPolling()
         }).catch((error) => {
           error.value = error.message || '重新翻译失败'
           loading.value = false
@@ -441,10 +467,11 @@ function getProviderText(provider?: string): string {
 </script>
 
 <style>
-/* pages/result/index.wxss */
+/* Result Page - Figma Design Styles */
 .result-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(to bottom right, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  padding: 24rpx;
 }
 
 .nav-header {
@@ -738,13 +765,14 @@ function getProviderText(provider?: string): string {
 
 .new-translation-btn {
   flex: 2;
-  background: linear-gradient(45deg, #4CAF50, #45a049);
+  background: linear-gradient(to right, #4ade80 0%, #06b6d4 100%);
   color: white;
   border: none;
   border-radius: 12rpx;
   font-size: 28rpx;
   font-weight: 500;
   padding: 24rpx;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .history-btn {

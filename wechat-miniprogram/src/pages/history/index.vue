@@ -530,10 +530,11 @@ function getProcessingTime(item: TranslationTask): string {
 </script>
 
 <style>
-/* pages/history/index.wxss */
+/* History Page - Figma Design Styles */
 .history-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(to bottom right, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  padding: 24rpx;
 }
 
 .nav-header {

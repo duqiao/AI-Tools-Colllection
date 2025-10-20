@@ -467,7 +467,7 @@ defineExpose({
 /* Figma Design Styles - AI Voice Video Tools */
 .ai-tools-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
+  background: linear-gradient(to bottom right, #e0e7ff 0%, #dbeafe 50%, #cffafe 100%);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -569,10 +569,11 @@ defineExpose({
 }
 
 .main-title {
-  color: #2563eb;
+  color: #3b82f6;
   font-size: 48rpx;
   font-weight: 700;
   margin: 0;
+  line-height: 1.2;
 }
 
 /* Info Banner */
@@ -697,7 +698,7 @@ defineExpose({
   color: #6b7280;
   font-size: 28rpx;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .feature-arrow {
@@ -772,20 +773,20 @@ defineExpose({
 
 .cta-button {
   width: 100%;
-  background: linear-gradient(135deg, #4ade80 0%, #06b6d4 100%);
+  background: linear-gradient(to right, #4ade80 0%, #06b6d4 100%);
   border-radius: 9999rpx;
   padding: 32rpx 48rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
   cursor: pointer;
   border: none;
 }
 
 .cta-button:hover {
-  box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
   transform: translateY(-2rpx);
 }
 
@@ -867,7 +868,7 @@ defineExpose({
 }
 
 .nav-icon.active {
-  color: #2563eb;
+  color: #3b82f6;
 }
 
 .nav-text {
@@ -876,7 +877,7 @@ defineExpose({
 }
 
 .nav-text.active {
-  color: #2563eb;
+  color: #3b82f6;
 }
 
 /* Android Navigation Bar */
@@ -905,9 +906,9 @@ defineExpose({
   color: #4b5563;
 }
 
-/* Color classes for icon backgrounds */
+/* Color classes for icon backgrounds - Exact Tailwind Colors from Figma */
 .bg-green-500 {
-  background: #10b981;
+  background: #22c55e;
 }
 
 .bg-blue-500 {
@@ -915,7 +916,7 @@ defineExpose({
 }
 
 .bg-purple-500 {
-  background: #8b5cf6;
+  background: #a855f7;
 }
 
 .bg-blue-400 {

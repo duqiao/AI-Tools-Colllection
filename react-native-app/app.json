@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "AI Translation Tool",
+    "slug": "ai-translation-tool",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.ai-translation",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to record audio for translation",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record audio for translation",
+        "NSDocumentsFolderUsageDescription": "This app needs document access to upload media files for translation"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.yourcompany.ai-translation",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
