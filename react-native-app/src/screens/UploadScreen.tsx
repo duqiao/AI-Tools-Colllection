@@ -5,11 +5,30 @@ import Icon from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from '@/theme';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { Header } from '@/components/layout/Header';
-import { FileUploader } from '@/components/features/FileUploader';
+import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/Button';
+import { MediaFile } from '@/services/MediaUploadService';
+import { useNavigation } from '@react-navigation/native';
 
 export const UploadScreen: React.FC = () => {
   const theme = useTheme();
+  const navigation = useNavigation();
+  const [selectedFiles, setSelectedFiles] = React.useState<MediaFile[]>([]);
+
+  const handleFilesSelected = (files: MediaFile[]) => {
+    setSelectedFiles(files);
+  };
+
+  const handleError = (error: string) => {
+    console.error('File upload error:', error);
+  };
+
+  const handleUploadStart = () => {
+    if (selectedFiles.length > 0) {
+      // Navigate to result screen with files
+      navigation.navigate('Result' as never, { files: selectedFiles } as never);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -25,7 +44,23 @@ export const UploadScreen: React.FC = () => {
             支持音频和视频文件，最大50MB
           </Text>
 
-          <FileUploader />
+          <FileUploader
+            onFilesSelected={handleFilesSelected}
+            onError={handleError}
+            maxFiles={5}
+            maxFileSize={100 * 1024 * 1024} // 100MB
+            allowedTypes="all"
+          />
+
+          {selectedFiles.length > 0 && (
+            <View style={styles.uploadButtonContainer}>
+              <Button
+                title={`开始翻译 (${selectedFiles.length} 个文件)`}
+                onPress={handleUploadStart}
+                disabled={selectedFiles.length === 0}
+              />
+            </View>
+          )}
 
           <View style={styles.featuresSection}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
@@ -152,6 +187,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '400',
     flex: 1,
+  },
+  uploadButtonContainer: {
+    marginVertical: 24,
   },
 });
 

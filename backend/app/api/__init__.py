@@ -1,12 +1,6 @@
-"""
-API package initialization
-
-This module provides the API package structure and common imports.
-"""
-
+# API package initialization
 from fastapi import APIRouter
 
-# Create API router for v1
-api_router = APIRouter()
+from app.api import auth, upload, translation, users, health
 
-__all__ = ["api_router"]
+__all__ = ["auth", "upload", "translation", "users", "health"]

@@ -1,84 +1,99 @@
-"""
-Core Configuration Settings
-
-This module contains all configuration settings for the FastAPI application.
-"""
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
-from typing import List
+from pydantic_settings import BaseSettings
+from typing import List, Optional
 import os
-
+from pathlib import Path
 
 class Settings(BaseSettings):
-    """Application settings"""
-    
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=False,
-        extra="ignore"
-    )
-    
     # Application
-    app_name: str = "WeChat Media Translator"
-    debug: bool = False
-    version: str = "1.0.0"
+    APP_NAME: str = "AI Media Translation API"
+    VERSION: str = "1.0.0"
+    DEBUG: bool = False
     
-    # CORS - Handle both string and list formats
-    cors_origins: List[str] = ["https://servicewechat.com", "http://localhost:3000", "http://127.0.0.1:3000"]
+    # Server
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
     
-    @field_validator('cors_origins', mode='before')
-    @classmethod
-    def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',')]
-        return v
+    # CORS
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:8094",
+        "http://localhost:19006", 
+        "exp://localhost:19000"
+    ]
     
     # Database
-    database_url: str = "postgresql://postgres:password@localhost/wechat_translator"
-    database_echo: bool = False
+    MONGODB_URI: str = "mongodb://localhost:27017/ai_media_translation"
+    REDIS_URL: str = "redis://localhost:6379"
     
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    # JWT
+    JWT_SECRET: str = "your-super-secret-jwt-key-change-this-in-production"
+    JWT_REFRESH_SECRET: str = "your-super-secret-refresh-key-change-this-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     
-    # Security
-    secret_key: str = "your-super-secret-key-change-in-production"
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 1440  # 24 hours
+    # File Upload
+    UPLOAD_DIR: str = "./uploads"
+    TEMP_DIR: str = "./temp"
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
+    MAX_AUDIO_SIZE: int = 50 * 1024 * 1024   # 50MB
+    MAX_VIDEO_SIZE: int = 100 * 1024 * 1024  # 100MB
+    ALLOWED_AUDIO_TYPES: List[str] = [
+        "audio/mpeg",      # MP3
+        "audio/wav",       # WAV
+        "audio/x-wav",     # WAV
+        "audio/mp4",       # M4A
+        "audio/ogg",       # OGG
+        "audio/flac",      # FLAC
+        "audio/aac"        # AAC
+    ]
+    ALLOWED_VIDEO_TYPES: List[str] = [
+        "video/mp4",       # MP4
+        "video/quicktime", # MOV
+        "video/x-msvideo", # AVI
+        "video/x-matroska", # MKV
+        "video/webm"       # WebM
+    ]
     
-    # WeChat Configuration
-    wechat_appid: str = ""
-    wechat_secret: str = ""
+    # Speech-to-Text
+    STT_PROVIDER: str = "openai"  # openai, google, azure, ollama, mock
+    OPENAI_API_KEY: Optional[str] = None
+    WHISPER_MODEL: str = "base"  # tiny, base, small, medium, large
+    FALLBACK_STT_PROVIDER: str = "mock"  # Fallback if provider fails
     
-    # File Storage
-    upload_dir: str = "uploads"
-    max_file_size: int = 100 * 1024 * 1024  # 100MB
-    allowed_file_types: List[str] = ["mp3", "wav", "mp4", "mov", "avi", "webm"]
+    # Ollama Configuration
+    OLLAMA_BASE_URL: str = "http://localhost:11434"  # Default Ollama server URL
+    OLLAMA_MODEL: str = "deepseek-coder:6.7b-instruct"  # Default model for DeepSeek
+    OLLAMA_TIMEOUT: int = 300  # seconds
+    OLLAMA_MAX_TOKENS: int = 4096  # Maximum tokens to generate
     
-    @field_validator('allowed_file_types', mode='before')
-    @classmethod
-    def parse_allowed_file_types(cls, v):
-        if isinstance(v, str):
-            return [file_type.strip() for file_type in v.split(',')]
-        return v
+    # Translation
+    TRANSLATION_PROVIDER: str = "google"  # google, deepl, mock
+    GOOGLE_TRANSLATE_API_KEY: Optional[str] = None
+    DEEPL_API_KEY: Optional[str] = None
+    FALLBACK_TRANSLATION_PROVIDER: str = "mock"
     
-    # External APIs
-    alibaba_cloud_access_key_id: str = ""
-    alibaba_cloud_access_key_secret: str = ""
-    alibaba_cloud_region: str = "cn-beijing"
+    # User Quotas
+    GUEST_DAILY_LIMIT: int = 3
+    FREE_DAILY_LIMIT: int = 10
+    PREMIUM_DAILY_LIMIT: int = 1000
     
-    tencent_cloud_secret_id: str = ""
-    tencent_cloud_secret_key: str = ""
-    tencent_cloud_region: str = "ap-beijing"
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = 100
     
-    # Performance
-    max_concurrent_translations: int = 1000
-    translation_timeout: int = 300  # 5 minutes
+    # Processing
+    MAX_CONCURRENT_JOBS: int = 3
+    JOB_TIMEOUT_MINUTES: int = 30
     
-    # Logging
-    log_level: str = "INFO"
-    log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Create directories if they don't exist
+        Path(self.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+        Path(self.TEMP_DIR).mkdir(parents=True, exist_ok=True)
 
-# Create settings instance
+# Global settings instance
 settings = Settings()

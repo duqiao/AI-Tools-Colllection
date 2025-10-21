@@ -1,61 +1,30 @@
-"""
-Logging Configuration
-
-This module sets up structured logging for the FastAPI application.
-"""
-
 import logging
-import structlog
 import sys
 from pathlib import Path
-
 from app.core.config import settings
 
-
-def setup_logging() -> None:
-    """Configure structured logging with console and file output."""
-    
-    # Create logs directory if it doesn't exist
+def setup_logging():
+    """Setup logging configuration"""
+    # Create logs directory
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     
-    # Configure structlog
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer()
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
+    # Create handlers
+    handlers = [
+        logging.FileHandler(log_dir / "app.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
     
-    # Configure standard logging
+    # Create error handler with proper level filtering
+    error_handler = logging.FileHandler(log_dir / "errors.log")
+    error_handler.setLevel(logging.ERROR)
+    handlers.append(error_handler)
+    
+    # Configure logging
     logging.basicConfig(
-        format=settings.log_format,
-        level=getattr(logging, settings.log_level),
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_dir / "app.log")
-        ]
+        level=logging.DEBUG if settings.DEBUG else logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=handlers
     )
     
-    # Configure loggers for third-party libraries
-    logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-    logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.INFO if settings.database_echo else logging.WARNING
-    )
-
-
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    """Get a structured logger for the given name."""
-    return structlog.get_logger(name)
+    return logging

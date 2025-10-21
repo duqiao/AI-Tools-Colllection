@@ -8,6 +8,7 @@ import { UploadScreen } from '@/screens/UploadScreen';
 import { ResultScreen } from '@/screens/ResultScreen';
 import { HistoryScreen } from '@/screens/HistoryScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
+import { DebugGuestLogin } from '@/screens/DebugGuestLogin';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -90,6 +91,14 @@ export const AppNavigator = () => {
           presentation: 'modal',
         }}
         initialParams={{ taskId: '' }}
+      />
+      <Stack.Screen 
+        name="Debug" 
+        component={DebugGuestLogin}
+        options={{
+          headerShown: true,
+          title: '游客登录调试',
+        }}
       />
     </Stack.Navigator>
   );

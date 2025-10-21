@@ -52,7 +52,12 @@
       "Bash(taskkill:*)",
       "Bash(npm start:*)",
       "Bash(cp:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(rm:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(explorer:*)",
+      "WebFetch(domain:docs.mongodb.com)",
+      "WebFetch(domain:www.mongodb.com)"
     ],
     "deny": []
   }

@@ -2,7 +2,10 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiResponse, User, TranslationTask, SubscriptionPlan, PaymentOrder, QuotaStatus, WeChatUserInfo, UploadResponse, TranslationRequest } from '@/types';
 
+// API Configuration
 const API_BASE_URL = __DEV__ ? 'http://localhost:8000/api/v1' : 'https://your-api-domain.com/api/v1';
+const ACCESS_TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -38,9 +41,39 @@ class ApiClient {
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid
-          await this.clearToken();
-          // You might want to navigate to login screen here
+          // Token expired or invalid - try to refresh
+          const refreshToken = await this.getRefreshToken();
+          if (refreshToken) {
+            try {
+              const refreshResponse = await this.client.post('/auth/refresh', {
+                refresh_token: refreshToken
+              });
+              
+              if (refreshResponse.data.success) {
+                const newToken = refreshResponse.data.data.token;
+                const newRefreshToken = refreshResponse.data.data.refreshToken;
+                
+                // Save new tokens
+                this.token = newToken;
+                await AsyncStorage.setItem(ACCESS_TOKEN_KEY, newToken);
+                await AsyncStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
+                
+                // Retry the original request with new token
+                const originalRequest = error.config;
+                if (originalRequest?.headers) {
+                  originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                }
+                return this.client(originalRequest);
+              }
+            } catch (refreshError) {
+              // Refresh failed, clear tokens and redirect to login
+              await this.clearToken();
+              console.error('Token refresh failed:', refreshError);
+            }
+          } else {
+            // No refresh token, clear auth data
+            await this.clearToken();
+          }
         }
         return Promise.reject(error);
       }
@@ -49,7 +82,7 @@ class ApiClient {
 
   private async loadToken() {
     try {
-      const storedToken = await AsyncStorage.getItem('@auth_token');
+      const storedToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
       if (storedToken) {
         this.token = storedToken;
       }
@@ -61,7 +94,7 @@ class ApiClient {
   private async saveToken(token: string) {
     try {
       this.token = token;
-      await AsyncStorage.setItem('@auth_token', token);
+      await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
     } catch (error) {
       console.error('Error saving token:', error);
     }
@@ -70,10 +103,23 @@ class ApiClient {
   private async clearToken() {
     try {
       this.token = null;
-      await AsyncStorage.removeItem('@auth_token');
+      await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
     } catch (error) {
       console.error('Error clearing token:', error);
     }
+  }
+
+  private async getRefreshToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Public method to set token externally (from AuthService)
+  public setToken(token: string): void {
+    this.token = token;
   }
 
   // Generic request methods
