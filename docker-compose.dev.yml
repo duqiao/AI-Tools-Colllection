@@ -1,99 +1,249 @@
-# Development Docker Compose Configuration
-# Use this for local development with hot reload
+
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: wechat-translator-postgres-dev
+  # ================================
+  # MongoDB Service (Development)
+  # ================================
+  mongodb:
+    image: mongo:6.0
+    container_name: ai-mongodb-dev
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: wechat_translator
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "27018:27017"
     volumes:
-      - postgres_data_dev:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    networks:
-      - wechat-translator-dev
+      - mongodb_dev_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: dev123456
+      MONGO_INITDB_DATABASE: ai_media_translation
+    command: mongod --auth --bind_ip_all
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ai-backend-network
 
-  # Redis for caching and sessions
+  # ================================
+  # Redis Service (Development)
+  # ================================
   redis:
     image: redis:7-alpine
-    container_name: wechat-translator-redis-dev
+    container_name: ai-redis-dev
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
-      - redis_data_dev:/data
-    networks:
-      - wechat-translator-dev
+      - redis_dev_data:/data
+    command: redis-server --requirepass dev123456 --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 3s
-      retries: 5
+      retries: 3
+    networks:
+      - ai-backend-network
 
-  # FastAPI Backend (Development)
+  # ================================
+  # PostgreSQL Service (Production)
+  # ================================
+  postgres:
+    image: postgres:15
+    container_name: ai-postgres-prod
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - postgres_logs:/var/log/postgresql
+    environment:
+      POSTGRES_DB: ai_media_translation
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: prod123456
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      PGUSER: postgres
+      PGDATA: /var/lib/postgresql/data
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements,pg_stat_activity
+      -c logging_collector=on
+      -c log_destination=stderr
+      -c log_statement=all
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-U", "postgres", "-d", "ai_media_translation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-backend-network
+
+  # ================================
+  # Backend API Service
+  # ================================
+  # Backend API Service
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
-    container_name: wechat-translator-backend-dev
+      dockerfile: Dockerfile
+    container_name: ai-backend-api
     restart: unless-stopped
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/wechat_translator
-      - REDIS_URL=redis://redis:6379/0
-      - DEBUG=true
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3007,http://127.0.0.1:3000,http://127.0.0.1:3007
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - ./uploads:/app/uploads
+      - backend_logs:/app/logs
+      - uploads:/app/uploads
+    environment:
+      # Development vs Production mode
+      - NODE_ENV=development
+      - DEBUG=true
+      - PYTHONPATH=/app
+      
+      # Database type (configurable)
+      - DATABASE_TYPE=mongodb
+      
+      # MongoDB Configuration (Development)
+      - MONGODB_URI=mongodb://admin:dev123456@mongodb:27017/ai_media_translation?authSource=admin
+      - REDIS_URL=redis://:dev123456@redis:6379/0
+      
+      # PostgreSQL Configuration (Production)
+      - POSTGRES_URI=postgresql://postgres:prod123456@postgres:5432/ai_media_translation
+      
+      # API Configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      
+      # Security
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-key-change-in-production
+      
+      # Ollama Configuration
+      - OLLAMA_BASE_URL=http://localhost:11434
+      - OLLAMA_MODEL=deepseek-coder:6.7b-instruct
+      - OLLAMA_TIMEOUT=300
+      - OLLAMA_MAX_TOKENS=4096
+      
+      # File Upload Configuration
+      - UPLOAD_DIR=/app/uploads
+      - MAX_FILE_SIZE=104857600
+      - MAX_AUDIO_SIZE=52428800
+      - MAX_VIDEO_SIZE=104857600
+      
+      # CORS Configuration
+      - CORS_ORIGINS=["http://localhost:19006", "http://127.0.0.1:19006", "exp://localhost:19000", "http://localhost:8000"]
+      
+      # Database Connection Pooling
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=20
+      
+      # Performance Configuration
+      - MAX_CONCURRENT_JOBS=10
+      - PROCESSING_TIMEOUT=1800
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - mongodb
+      - redis
+      # postgres:  # Uncomment for production mode
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
-      - wechat-translator-dev
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ai-backend-network
 
-  # pgAdmin for database management (Development)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: wechat-translator-pgadmin-dev
+  # ================================
+  # Database Administration Services (Optional)
+  # ================================
+  mongo-express:
+    image: mongo-express
+    container_name: ai-mongo-express
     restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: dev123456
+      ME_CONFIG_MONGODB_URL: mongodb://admin:dev123456@mongodb:27017
+    depends_on:
+      - mongodb
+    networks:
+      - ai-backend-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ai-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - postgres
     networks:
-      - wechat-translator-dev
+      - ai-backend-network
 
+  # ================================
+  # Monitoring Services (Optional)
+  # ================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_logs:/var/log/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    networks:
+      - ai-backend-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - ai-backend-network
+
+# ================================
+  # Volumes
+  # ================================
 volumes:
-  postgres_data_dev:
+  mongodb_dev_data:
     driver: local
-  redis_data_dev:
+  redis_dev_data:
     driver: local
-  pgadmin_data:
+  postgres_prod_data:
+    driver: local
+  postgres_logs:
+    driver: local
+  backend_logs:
+    driver: local
+  uploads:
+    driver: local
+  grafana_data:
+    driver: local
+  grafana_logs:
+    driver: local
+  prometheus_data:
     driver: local
 
+# ================================
+  # Networks
+  # ================================
 networks:
-  wechat-translator-dev:
+  ai-backend-network:
     driver: bridge

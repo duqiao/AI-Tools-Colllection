@@ -10,19 +10,23 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # Server
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    HOST: str = "127.0.0.1"
+    PORT: int = 8001
     
     # CORS
     ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:8001",
         "http://localhost:8094",
         "http://localhost:19006", 
         "exp://localhost:19000"
     ]
     
+    # Allow CORS_ORIGINS from environment (will be parsed)
+    CORS_ORIGINS: Optional[str] = None
+    
     # Database
-    MONGODB_URI: str = "mongodb://localhost:27017/ai_media_translation"
-    REDIS_URL: str = "redis://localhost:6379"
+    MONGODB_URI: str = "mongodb://admin:dev123456@localhost:27018/ai_media_translation?authSource=admin"
+    REDIS_URL: str = "redis://:dev123456@localhost:6379"
     
     # JWT
     JWT_SECRET: str = "your-super-secret-jwt-key-change-this-in-production"
@@ -85,12 +89,24 @@ class Settings(BaseSettings):
     JOB_TIMEOUT_MINUTES: int = 30
     
     class Config:
-        env_file = ".env"
+        env_file = ".env.local"  # Prioritize local development config
         env_file_encoding = "utf-8"
         case_sensitive = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        
+        # Parse CORS_ORIGINS from environment if provided
+        if self.CORS_ORIGINS:
+            try:
+                import json
+                parsed_origins = json.loads(self.CORS_ORIGINS)
+                if isinstance(parsed_origins, list):
+                    self.ALLOWED_ORIGINS = parsed_origins
+            except (json.JSONDecodeError, TypeError):
+                # Fallback: split by comma if JSON parsing fails
+                self.ALLOWED_ORIGINS = [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        
         # Create directories if they don't exist
         Path(self.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
         Path(self.TEMP_DIR).mkdir(parents=True, exist_ok=True)

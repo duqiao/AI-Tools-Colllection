@@ -1,0 +1,60 @@
+# Production build stage
+FROM node:18-alpine AS build-stage
+
+# Set working directory
+WORKDIR /app
+
+# Install build tools
+RUN npm ci
+
+# Copy package files
+COPY package*.json ./
+COPY npm-shrinkwrap.json ./
+
+# Install production dependencies
+RUN npm ci --only=production
+
+# Create production build
+RUN npm run build
+
+# Remove development dependencies
+RUN npm prune --production
+
+# Production stage
+FROM node:18-alpine AS production-stage
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Set working directory
+WORKDIR /app
+
+# Copy production build
+COPY --from=build-stage /app .
+
+# Copy package files
+COPY package*.json ./
+COPY npm-shrinkwrap.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Create non-root user for security
+USER node
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/uploads
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Environment
+ENV NODE_ENV=production
+ENV PYTHONPATH=/app
+
+# Command to run the application
+CMD ["node", "server.js"]

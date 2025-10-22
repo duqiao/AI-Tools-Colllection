@@ -1,0 +1,29 @@
+# Use production build stage
+# Development stage includes hot reload and debugging tools
+
+FROM node:18-alpine AS development-stage
+
+# Set working directory
+WORKDIR /app
+
+# Install build tools
+RUN npm ci
+
+# Copy package files
+COPY package*.json ./
+COPY npm-shrinkwrap.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Expose development port
+EXPOSE 8000
+
+# Use non-root user
+USER node
+
+# Development command with hot reload
+CMD ["npm", "run", "start:dev"]

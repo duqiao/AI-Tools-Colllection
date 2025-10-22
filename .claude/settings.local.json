@@ -57,7 +57,11 @@
       "Bash(npm cache clean:*)",
       "Bash(explorer:*)",
       "WebFetch(domain:docs.mongodb.com)",
-      "WebFetch(domain:www.mongodb.com)"
+      "WebFetch(domain:www.mongodb.com)",
+      "Bash(docker exec:*)",
+      "Bash(dir:*)",
+      "Bash(call:*)",
+      "Bash(\"backend\\venv\\Scripts\\python.exe\" --version)"
     ],
     "deny": []
   }

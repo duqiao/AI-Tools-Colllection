@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiResponse, User, TranslationTask, SubscriptionPlan, PaymentOrder, QuotaStatus, WeChatUserInfo, UploadResponse, TranslationRequest } from '@/types';
 
 // API Configuration
-const API_BASE_URL = __DEV__ ? 'http://localhost:8000/api/v1' : 'https://your-api-domain.com/api/v1';
+const API_BASE_URL = __DEV__ ? 'http://127.0.0.1:8001/api/v1' : 'https://your-api-domain.com/api/v1';
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
