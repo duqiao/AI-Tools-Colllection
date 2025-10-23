@@ -61,7 +61,11 @@
       "Bash(docker exec:*)",
       "Bash(dir:*)",
       "Bash(call:*)",
-      "Bash(\"backend\\venv\\Scripts\\python.exe\" --version)"
+      "Bash(\"backend\\venv\\Scripts\\python.exe\" --version)",
+      "Bash(docker start:*)",
+      "Bash(\"backend\\venv\\Scripts\\python.exe\":*)",
+      "Bash(\"venv\\Scripts\\python.exe\" run.py)",
+      "Bash(\"venv\\Scripts\\python.exe\" run_windows.py)"
     ],
     "deny": []
   }

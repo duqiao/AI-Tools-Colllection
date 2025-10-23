@@ -510,3 +510,29 @@ export class AuthService {
 }
 
 export default AuthService;
+  // Create guest user with required openid field
+  const createGuestUser = async () => {
+    try {
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substr(2, 9);
+      const response = await apiClient.request({
+        method: 'POST',
+        url: '/auth/guest',
+        data: {
+          username: 'Guest User',
+          openid: `guest_${timestamp}_${randomId}`
+        }
+      });
+      
+      if (response.success && response.data) {
+        const { token } = response.data;
+        await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
+        return { success: true, token, user: response.data.user };
+      }
+      
+      return { success: false, error: response.error || 'Guest login failed' };
+    } catch (error) {
+      console.error('Guest login failed:', error);
+      return { success: false, error: error.message };
+    }
+  };

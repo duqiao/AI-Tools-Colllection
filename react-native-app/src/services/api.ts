@@ -314,3 +314,17 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 export default apiClient;
+  // Authentication helper
+  const ensureAuthenticated = async () => {{
+    let token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    if (!token) {{
+      console.log('No token found, creating guest user...');
+      const guestResult = await createGuestUser();
+      if (guestResult.success) {{
+        token = guestResult.token;
+      }}
+    }}
+    
+    return token;
+  }};
