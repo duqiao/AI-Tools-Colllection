@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from '@/theme';
@@ -9,11 +9,25 @@ import { FileUploader } from '@/components/FileUploader';
 import { Button } from '@/components/ui/Button';
 import { MediaFile } from '@/services/MediaUploadService';
 import { useNavigation } from '@react-navigation/native';
+import UploadProgressManager, { UploadProgress } from '@/services/UploadProgressManager';
+import { apiClient } from '@/services/api';
 
 export const UploadScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const [selectedFiles, setSelectedFiles] = React.useState<MediaFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<MediaFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadManager] = useState(() => UploadProgressManager.getInstance());
+
+  React.useEffect(() => {
+    // Set up progress listener
+    const unsubscribe = uploadManager.addListener((uploads) => {
+      setUploadProgress(uploads);
+    });
+
+    return unsubscribe;
+  }, [uploadManager]);
 
   const handleFilesSelected = (files: MediaFile[]) => {
     setSelectedFiles(files);
@@ -21,13 +35,110 @@ export const UploadScreen: React.FC = () => {
 
   const handleError = (error: string) => {
     console.error('File upload error:', error);
+    Alert.alert('错误', error);
   };
 
-  const handleUploadStart = () => {
-    if (selectedFiles.length > 0) {
-      // Navigate to result screen with files
-      navigation.navigate('Result' as never, { files: selectedFiles } as never);
+  const handleUploadStart = async () => {
+    if (selectedFiles.length === 0) {
+      Alert.alert('提示', '请先选择要上传的文件');
+      return;
     }
+
+    setIsUploading(true);
+    
+    try {
+      // Ensure authentication before upload
+      await ensureAuthenticated();
+      
+      // Upload files one by one
+      const uploadPromises = selectedFiles.map((file) => 
+        uploadFile(file)
+      );
+      
+      const jobIds = await Promise.all(uploadPromises);
+      
+      // Navigate to results screen with job IDs
+      navigation.navigate('Result' as never, { 
+        taskId: `batch_${Date.now()}`,
+        jobIds: jobIds 
+      } as never);
+      
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      Alert.alert('上传失败', error.message || '文件上传过程中发生错误');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const ensureAuthenticated = async () => {
+    try {
+      // Always create a fresh guest user for simplicity in development
+      console.log('=== CREATING FRESH GUEST USER FOR UPLOAD ===');
+      
+      // Clear any existing token first
+      apiClient['client'].defaults.headers.Authorization = undefined;
+      console.log('Cleared any existing token');
+      
+      // Create guest user (matching debug script format)
+      const guestData = {
+        username: `Guest_${Date.now()}`,
+        openid: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+      
+      console.log('Creating guest user with data:', guestData);
+      console.log('Sending POST request to /auth/guest');
+      
+      const response = await apiClient.client.post('/auth/guest', guestData);
+      
+      console.log('Guest auth response status:', response.status);
+      console.log('Guest auth response data:', response.data);
+      
+      // Try multiple possible token locations (matching different response formats)
+      const token = response.data?.token || 
+                   response.data?.user?.token || 
+                   response.data?.access_token;
+      
+      if (token) {
+        apiClient['client'].defaults.headers.Authorization = `Bearer ${token}`;
+        console.log('✅ Guest authentication successful, fresh token set');
+        console.log('Token preview:', token.substring(0, 30) + '...');
+      } else {
+        console.error('❌ No token found in response:', response.data);
+        throw new Error('Failed to get token from guest authentication');
+      }
+    } catch (error) {
+      console.error('❌ Authentication failed:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
+      throw new Error('Authentication failed: ' + error.message);
+    }
+  };
+
+  const uploadFile = async (file: MediaFile): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      uploadManager.startUpload(file, {
+        onProgress: (progress) => {
+          console.log(`Upload progress for ${file.name}: ${progress.progress}%`);
+        },
+        onComplete: (result) => {
+          console.log('Upload complete:', result);
+          const jobId = result?.job_id || result?.id;
+          if (jobId) {
+            resolve(jobId);
+          } else {
+            reject(new Error('No job ID received from server'));
+          }
+        },
+        onError: (error) => {
+          console.error('Upload error:', error);
+          reject(error);
+        }
+      });
+    });
+  };
+
+  const getProgressForFile = (file: MediaFile): UploadProgress | null => {
+    return uploadProgress.find(progress => progress.fileName === file.name) || null;
   };
 
   return (
@@ -55,10 +166,61 @@ export const UploadScreen: React.FC = () => {
           {selectedFiles.length > 0 && (
             <View style={styles.uploadButtonContainer}>
               <Button
-                title={`开始翻译 (${selectedFiles.length} 个文件)`}
+                title={isUploading ? `上传中...` : `开始翻译 (${selectedFiles.length} 个文件)`}
                 onPress={handleUploadStart}
-                disabled={selectedFiles.length === 0}
+                disabled={selectedFiles.length === 0 || isUploading}
               />
+              
+              {/* Upload Progress */}
+              {uploadProgress.length > 0 && (
+                <View style={styles.progressContainer}>
+                  <Text style={[styles.progressTitle, { color: theme.colors.text.primary }]}>
+                    上传进度
+                  </Text>
+                  {selectedFiles.map((file, index) => {
+                    const progress = getProgressForFile(file);
+                    if (!progress) return null;
+                    
+                    return (
+                      <View key={index} style={[styles.progressItem, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                        <View style={styles.progressInfo}>
+                          <Text style={[styles.progressFileName, { color: theme.colors.text.primary }]}>
+                            {file.name}
+                          </Text>
+                          <Text style={[styles.progressText, { color: theme.colors.text.secondary }]}>
+                            {progress.status === 'uploading' ? `${Math.round(progress.progress)}%` : 
+                             progress.status === 'completed' ? '已完成' :
+                             progress.status === 'error' ? '失败' :
+                             progress.status === 'processing' ? '处理中...' : '等待中...'}
+                          </Text>
+                        </View>
+                        
+                        {progress.status === 'uploading' && (
+                          <View style={styles.progressBar}>
+                            <View 
+                              style={[
+                                styles.progressFill, 
+                                { 
+                                  width: `${progress.progress}%`,
+                                  backgroundColor: theme.colors.primary
+                                }
+                              ]} 
+                            />
+                          </View>
+                        )}
+                        
+                        {progress.status === 'error' && (
+                          <Icon name="error" size={20} color={theme.colors.error} />
+                        )}
+                        
+                        {progress.status === 'completed' && (
+                          <Icon name="check-circle" size={20} color={theme.colors.success} />
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 
@@ -191,6 +353,45 @@ const styles = StyleSheet.create({
   uploadButtonContainer: {
     marginVertical: 24,
   },
+  progressContainer: {
+    marginTop: 16,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  progressItem: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressFileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 12,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+    },
 });
 
 export default UploadScreen;

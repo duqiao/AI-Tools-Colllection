@@ -217,7 +217,7 @@ class ApiClient {
     formData.append('file_size', file.size.toString());
 
     try {
-      const response = await this.client.post('/translation/upload', formData, {
+      const response = await this.client.post('/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

@@ -9,6 +9,7 @@ pymongo==4.6.0
 redis==5.0.1
 pydantic==2.5.0
 pydantic-settings==2.1.0
+email-validator==2.1.0
 aiofiles==23.2.1
 python-dotenv==1.0.0
 
@@ -22,6 +23,7 @@ deep-translator==1.11.4
 # Media Processing
 moviepy==1.0.3
 pydub==0.25.1
+mutagen==1.47.0
 opencv-python==4.8.1.78
 librosa==0.10.1
 

@@ -5,7 +5,7 @@ import {
   MediaType 
 } from 'expo-image-picker';
 import { DocumentPickerOptions, DocumentPickerResult, getDocumentAsync } from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // Supported file types
 export const SUPPORTED_AUDIO_TYPES = [
@@ -301,12 +301,6 @@ export class MediaUploadService {
     lastModified?: number;
   } | null> {
     try {
-      const info = await FileSystem.getInfoAsync(uri);
-      
-      if (!info.exists) {
-        return null;
-      }
-
       // Extract filename from URI
       const uriParts = uri.split('/');
       const fileName = uriParts[uriParts.length - 1] || 'unknown_file';
@@ -315,15 +309,115 @@ export class MediaUploadService {
       const extension = fileName.split('.').pop()?.toLowerCase();
       const mimeType = this.getMimeTypeFromExtension(extension);
 
-      return {
-        name: fileName,
-        size: info.size || 0,
-        mimeType: mimeType,
-        lastModified: info.modificationTime ? info.modificationTime * 1000 : undefined,
-      };
+      // Handle different platforms
+      if (typeof window !== 'undefined' && window.document) {
+        // Web platform - handle different URI types
+        try {
+          // Check if it's a blob URL or file object URL
+          if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+            // For blob URLs, we need to fetch the actual content to get size
+            try {
+              const response = await fetch(uri);
+              const blob = await response.blob();
+              return {
+                name: fileName,
+                size: blob.size,
+                mimeType: mimeType || blob.type || undefined,
+                lastModified: undefined,
+              };
+            } catch (blobError) {
+              console.warn('Blob fetch failed, using defaults:', blobError);
+              return {
+                name: fileName,
+                size: 0,
+                mimeType: mimeType,
+              };
+            }
+          } else if (uri.startsWith('http://') || uri.startsWith('https://')) {
+            // For HTTP URLs, try HEAD request first
+            try {
+              const response = await fetch(uri, { method: 'HEAD' });
+              const contentLength = response.headers.get('content-length');
+              const lastModified = response.headers.get('last-modified');
+              
+              return {
+                name: fileName,
+                size: contentLength ? parseInt(contentLength, 10) : 0,
+                mimeType: mimeType || response.headers.get('content-type') || undefined,
+                lastModified: lastModified ? new Date(lastModified).getTime() : undefined,
+              };
+            } catch (httpError) {
+              console.warn('HTTP HEAD request failed, trying GET:', httpError);
+              // Fallback to GET request to at least get some info
+              try {
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                return {
+                  name: fileName,
+                  size: blob.size,
+                  mimeType: mimeType || blob.type || undefined,
+                  lastModified: undefined,
+                };
+              } catch (fallbackError) {
+                console.warn('HTTP fallback failed, using defaults:', fallbackError);
+                return {
+                  name: fileName,
+                  size: 0,
+                  mimeType: mimeType,
+                };
+              }
+            }
+          } else {
+            // For local file paths or other URI schemes on web, use defaults
+            console.warn('Unsupported URI scheme on web, using defaults:', uri);
+            return {
+              name: fileName,
+              size: 0,
+              mimeType: mimeType,
+            };
+          }
+        } catch (webError) {
+          console.warn('Web file processing failed, using defaults:', webError);
+          return {
+            name: fileName,
+            size: 0,
+            mimeType: mimeType,
+          };
+        }
+      } else {
+        // Native platform - use expo-file-system
+        const info = await FileSystem.getInfoAsync(uri);
+        
+        if (!info.exists) {
+          return null;
+        }
+
+        return {
+          name: fileName,
+          size: info.size || 0,
+          mimeType: mimeType,
+          lastModified: info.modificationTime ? info.modificationTime * 1000 : undefined,
+        };
+      }
     } catch (error) {
       console.error('Failed to get file info:', error);
-      return null;
+      
+      // Fallback to basic info
+      try {
+        const uriParts = uri.split('/');
+        const fileName = uriParts[uriParts.length - 1] || 'unknown_file';
+        const extension = fileName.split('.').pop()?.toLowerCase();
+        const mimeType = this.getMimeTypeFromExtension(extension);
+        
+        return {
+          name: fileName,
+          size: 0,
+          mimeType: mimeType,
+        };
+      } catch (fallbackError) {
+        console.error('Fallback file info failed:', fallbackError);
+        return null;
+      }
     }
   }
 

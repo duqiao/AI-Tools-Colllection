@@ -295,12 +295,17 @@ export class UploadProgressManager {
       });
 
       // Configure and send request
-      xhr.open('POST', `${apiClient['client'].defaults.baseURL}/translation/upload`);
+      xhr.open('POST', `${apiClient['client'].defaults.baseURL}/upload`);
       
       // Set up headers
       const token = apiClient['client'].defaults.headers.Authorization;
+      console.log('UploadProgressManager - Available token:', token ? 'Found' : 'Not found');
+      
       if (token) {
         xhr.setRequestHeader('Authorization', token);
+        console.log('UploadProgressManager - Authorization header set');
+      } else {
+        console.warn('UploadProgressManager - No authorization token available');
       }
       
       // Send abort signal if provided

@@ -1,23 +1,161 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from '@/theme';
 import { StatusBar } from '@/components/layout/StatusBar';
 import { Header } from '@/components/layout/Header';
+import { apiClient } from '@/services/api';
 
-export const ResultScreen: React.FC<{ route?: { params: { taskId: string } } }> = ({ route }) => {
+interface TranscriptionResult {
+  id: string;
+  originalFilename: string;
+  transcribedText?: string;
+  confidence?: number;
+  duration?: number;
+  wordCount?: number;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export const ResultScreen: React.FC<{ route?: { params: { taskId: string; jobIds?: string[] } } }> = ({ route }) => {
   const theme = useTheme();
-  const { taskId } = route?.params || { taskId: '' };
+  const { taskId, jobIds } = route?.params || { taskId: '', jobIds: [] };
+  const [results, setResults] = useState<TranscriptionResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Mock data - in real app, this would come from API
-  const mockResult = {
-    originalFilename: 'demo-audio.mp3',
-    transcribedText: '这是模拟的转录文本内容。在实际应用中，这里会显示从语音识别服务获取的真实文本结果。',
-    confidence: 0.95,
-    duration: 120,
-    wordCount: 45,
+  // Initialize results for each job ID
+  useEffect(() => {
+    if (jobIds && jobIds.length > 0) {
+      const initialResults: TranscriptionResult[] = jobIds.map(jobId => ({
+        id: jobId,
+        originalFilename: `文件 ${jobId.slice(0, 8)}`,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }));
+      setResults(initialResults);
+    }
+  }, [jobIds]);
+
+  // Poll for results
+  useEffect(() => {
+    if (!jobIds || jobIds.length === 0) return;
+
+    const pollResults = async () => {
+      try {
+        const updatedResults = [...results];
+        let allCompleted = true;
+
+        for (let i = 0; i < jobIds.length; i++) {
+          const jobId = jobIds[i];
+          
+          try {
+            const response = await apiClient.get(`/upload/${jobId}`);
+            const data = response.data;
+
+            updatedResults[i] = {
+              ...updatedResults[i],
+              transcribedText: data.transcribed_text,
+              confidence: data.confidence,
+              duration: data.duration,
+              wordCount: data.word_count,
+              status: data.status === 'completed' ? 'completed' : 
+                     data.status === 'failed' ? 'error' : 
+                     data.status === 'processing' ? 'processing' : 'pending',
+              error: data.error_message,
+              completedAt: data.completed_at,
+            };
+
+            if (data.status !== 'completed' && data.status !== 'failed') {
+              allCompleted = false;
+            }
+          } catch (error) {
+            console.error(`Failed to fetch result for job ${jobId}:`, error);
+            updatedResults[i] = {
+              ...updatedResults[i],
+              status: 'error',
+              error: 'Failed to fetch result',
+            };
+          }
+        }
+
+        setResults(updatedResults);
+
+        if (!allCompleted && !isRefreshing) {
+          // Continue polling every 3 seconds
+          setTimeout(pollResults, 3000);
+        } else {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      } catch (error) {
+        console.error('Error polling results:', error);
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+
+    // Start polling after a short delay
+    const timeoutId = setTimeout(pollResults, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [jobIds, results.length, isRefreshing]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setIsLoading(true);
+    // This will trigger the polling useEffect
+  };
+
+  const handleCopyText = (text: string) => {
+    // TODO: Implement clipboard copy
+    console.log('Copy text:', text);
+  };
+
+  const handleShareResult = (result: TranscriptionResult) => {
+    // TODO: Implement share functionality
+    console.log('Share result:', result);
+  };
+
+  const getMainResult = () => results[0] || {
+    id: taskId,
+    originalFilename: '未知文件',
+    status: 'pending',
     createdAt: new Date().toISOString(),
+  };
+
+  const mainResult = getMainResult();
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Icon name="schedule" size={24} color={theme.colors.text.secondary} />;
+      case 'processing':
+        return <ActivityIndicator size={24} color={theme.colors.primary} />;
+      case 'completed':
+        return <Icon name="check-circle" size={24} color={theme.colors.success} />;
+      case 'error':
+        return <Icon name="error" size={24} color={theme.colors.error} />;
+      default:
+        return <Icon name="help" size={24} color={theme.colors.text.secondary} />;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '等待处理';
+      case 'processing':
+        return '正在转录...';
+      case 'completed':
+        return '转录完成';
+      case 'error':
+        return '转录失败';
+      default:
+        return '未知状态';
+    }
   };
 
   return (
@@ -27,72 +165,114 @@ export const ResultScreen: React.FC<{ route?: { params: { taskId: string } } }> 
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* File Info */}
+          {/* Status and File Info */}
           <View style={[styles.fileInfo, { backgroundColor: theme.colors.backgroundSecondary }]}>
             <View style={styles.fileHeader}>
-              <Icon name="audio-file" size={24} color={theme.colors.primary} />
+              {getStatusIcon(mainResult.status)}
               <View style={styles.fileDetails}>
                 <Text style={[styles.fileName, { color: theme.colors.text.primary }]}>
-                  {mockResult.originalFilename}
+                  {mainResult.originalFilename}
                 </Text>
                 <Text style={[styles.fileMeta, { color: theme.colors.text.secondary }]}>
-                  时长: {Math.floor(mockResult.duration / 60)}:{(mockResult.duration % 60).toString().padStart(2, '0')} | 
-                  字数: {mockResult.wordCount}
+                  状态: {getStatusText(mainResult.status)}
+                  {mainResult.duration && ` | 时长: ${Math.floor(mainResult.duration / 60)}:${(mainResult.duration % 60).toString().padStart(2, '0')}`}
+                  {mainResult.wordCount && ` | 字数: ${mainResult.wordCount}`}
                 </Text>
               </View>
+              
+              {/* Refresh Button */}
+              {(mainResult.status === 'pending' || mainResult.status === 'processing') && (
+                <TouchableOpacity 
+                  onPress={handleRefresh}
+                  style={[styles.refreshButton, { opacity: isRefreshing ? 0.5 : 1 }]}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? (
+                    <ActivityIndicator size={20} color={theme.colors.primary} />
+                  ) : (
+                    <Icon name="refresh" size={20} color={theme.colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
             
-            <View style={styles.confidenceInfo}>
-              <Text style={[styles.confidenceLabel, { color: theme.colors.text.secondary }]}>
-                识别准确度
-              </Text>
-              <View style={styles.confidenceBar}>
-                <View 
-                  style={[
-                    styles.confidenceProgress, 
-                    { 
-                      width: `${mockResult.confidence * 100}%`,
-                      backgroundColor: theme.colors.success
-                    }
-                  ]} 
-                />
+            {/* Error Display */}
+            {mainResult.status === 'error' && (
+              <View style={[styles.errorContainer, { backgroundColor: theme.colors.error + '20' }]}>
+                <Icon name="error-outline" size={20} color={theme.colors.error} />
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                  {mainResult.error || '转录过程中发生错误'}
+                </Text>
               </View>
-              <Text style={[styles.confidenceValue, { color: theme.colors.text.primary }]}>
-                {(mockResult.confidence * 100).toFixed(1)}%
-              </Text>
-            </View>
+            )}
+            
+            {/* Confidence Bar (only shown when completed) */}
+            {mainResult.status === 'completed' && mainResult.confidence && (
+              <View style={styles.confidenceInfo}>
+                <Text style={[styles.confidenceLabel, { color: theme.colors.text.secondary }]}>
+                  识别准确度
+                </Text>
+                <View style={styles.confidenceBar}>
+                  <View 
+                    style={[
+                      styles.confidenceProgress, 
+                      { 
+                        width: `${mainResult.confidence * 100}%`,
+                        backgroundColor: theme.colors.success
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={[styles.confidenceValue, { color: theme.colors.text.primary }]}>
+                  {(mainResult.confidence * 100).toFixed(1)}%
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Transcribed Text */}
-          <View style={styles.textSection}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
-              转录文本
-            </Text>
-            <View style={[styles.textContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-              <Text style={[styles.transcribedText, { color: theme.colors.text.primary }]}>
-                {mockResult.transcribedText}
+          {mainResult.status === 'completed' && mainResult.transcribedText ? (
+            <View style={styles.textSection}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                转录文本
               </Text>
+              <View style={[styles.textContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                <Text style={[styles.transcribedText, { color: theme.colors.text.primary }]}>
+                  {mainResult.transcribedText}
+                </Text>
+              </View>
+              
+              {/* Action Buttons */}
+              <View style={styles.actionSection}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => handleCopyText(mainResult.transcribedText!)}
+                >
+                  <Icon name="content-copy" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>复制文本</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: theme.colors.secondary }]}
+                  onPress={() => handleShareResult(mainResult)}
+                >
+                  <Icon name="share" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>分享结果</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.actionSection}>
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => console.log('Copy text')}
-            >
-              <Icon name="content-copy" size={20} color="white" />
-              <Text style={styles.actionButtonText}>复制文本</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: theme.colors.secondary }]}
-              onPress={() => console.log('Share result')}
-            >
-              <Icon name="share" size={20} color="white" />
-              <Text style={styles.actionButtonText}>分享结果</Text>
-            </TouchableOpacity>
-          </View>
+          ) : mainResult.status === 'pending' || mainResult.status === 'processing' ? (
+            <View style={styles.textSection}>
+              <View style={[styles.textContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size={40} color={theme.colors.primary} />
+                  <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
+                    {mainResult.status === 'pending' ? '等待开始转录...' : '正在转录中，请稍候...'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           {/* Additional Options */}
           <View style={styles.optionsSection}>
@@ -262,6 +442,33 @@ const styles = StyleSheet.create({
   optionDescription: {
     fontSize: 14,
     fontWeight: '400',
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 

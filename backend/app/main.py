@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -6,16 +6,17 @@ from contextlib import asynccontextmanager
 import uvicorn
 import os
 from pathlib import Path
+import time
+import logging
+
+# Setup request logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.redis import init_redis
 from app.api import auth, upload, translation, users, health
-from app.core.logging import setup_logging
-
-# Setup logging
-setup_logging()
-logger = setup_logging().getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,11 +58,29 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
+
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Log request details
+    logger.info(f"📥 {request.method} {request.url}")
+    logger.info(f"📋 Headers: {dict(request.headers)}")
+    
+    # Handle request
+    response = await call_next(request)
+    
+    # Log response details
+    process_time = time.time() - start_time
+    logger.info(f"📤 Response: {response.status_code} - {process_time:.4f}s")
+    
+    return response
 
 # Add compression middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -96,6 +115,15 @@ app.include_router(
     prefix="/api/v1/users",
     tags=["Users"]
 )
+
+# Global OPTIONS handler for CORS preflight requests
+@app.options("/{path:path}")
+async def global_options_handler(path: str):
+    """Handle all OPTIONS requests for CORS preflight"""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "CORS preflight successful"}
+    )
 
 @app.get("/")
 async def root():

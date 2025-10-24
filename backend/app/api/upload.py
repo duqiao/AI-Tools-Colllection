@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from typing import Optional, List
+from datetime import datetime, timedelta
 import os
 import uuid
 import aiofiles
@@ -9,7 +10,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_collection
-from app.core.redis import set_progress, delete_progress
+from app.core.redis import set_progress, delete_progress, get_progress
 from app.models.schemas import (
     MediaFile, ProcessingJob, ProcessingJobCreate, 
     UploadResponse, ProgressResponse, JobStatus
@@ -24,16 +25,29 @@ from app.utils.file_utils import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/", response_model=UploadResponse)
+@router.options("/")
+@router.options("")
+async def upload_options():
+    """Handle CORS preflight requests for upload endpoint"""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "CORS preflight successful"}
+    )
+
+@router.post("/")
+@router.post("")
 async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    file_type: Optional[str] = Form(None),
-    original_filename: Optional[str] = Form(None),
-    file_size: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
+    model: str = Form("whisper-1"),
+    speaker_diarization: bool = Form(False),
+    auto_delete: Optional[int] = Form(None),
     current_user = Depends(get_current_user)
 ):
-    """Upload audio or video file for processing"""
+    """Upload video or audio file for transcription"""
+    logger.info(f"📤 Upload request received - File: {file.filename}, User: {current_user.get('username', 'Unknown')}")
+    
     try:
         # Validate file
         if not file.content_type:
@@ -43,6 +57,21 @@ async def upload_file(
             raise HTTPException(
                 status_code=400, 
                 detail=f"Unsupported file type: {file.content_type}"
+            )
+        
+        # Validate model
+        valid_models = ["whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large"]
+        if model not in valid_models:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model. Valid options: {', '.join(valid_models)}"
+            )
+        
+        # Validate auto_delete
+        if auto_delete is not None and (auto_delete < 1 or auto_delete > 365):
+            raise HTTPException(
+                status_code=400,
+                detail="auto_delete must be between 1 and 365 days"
             )
         
         # Check file size
@@ -56,48 +85,106 @@ async def upload_file(
                 detail=f"File too large. Maximum size for {file_type_enum} is {get_file_size_formatted(max_size)}"
             )
         
-        # Generate unique filename
+        # Generate unique filename and job ID
         unique_filename = generate_unique_filename(file.filename or "upload")
         file_path = Path(settings.UPLOAD_DIR) / unique_filename
+        job_id = str(uuid.uuid4())
         
         # Save file
         async with aiofiles.open(file_path, 'wb') as f:
             content = await file.read()
             await f.write(content)
         
+        # Extract file duration if possible
+        duration = None
+        try:
+            # Basic duration extraction for audio/video files
+            import mutagen
+            audio_file = mutagen.File(file_path)
+            if audio_file and hasattr(audio_file, 'info'):
+                duration = audio_file.info.length
+        except:
+            pass  # Duration extraction is optional
+        
         # Create media file record
         media_file_data = {
-            "original_name": original_filename or file.filename,
-            "file_name": unique_filename,
-            "file_path": str(file_path),
-            "file_size": actual_file_size,
-            "mime_type": file.content_type,
-            "file_type": file_type_enum,
-            "uploaded_by": current_user["id"]
+            "originalName": file.filename,
+            "fileName": unique_filename,
+            "filePath": str(file_path),
+            "fileSize": actual_file_size,
+            "mimeType": file.content_type,
+            "duration": duration,
+            "uploaded_by": current_user["id"],
+            "expiresAt": datetime.utcnow() + timedelta(days=auto_delete or 30) if auto_delete != 0 else None
         }
         
-        collection = await get_collection("media_files")
-        result = await collection.insert_one(media_file_data)
+        # Create processing job record
+        job_data = {
+            "jobId": job_id,
+            "mediaFileId": None,  # Will be set after media file is created
+            "userId": current_user["id"],
+            "job": {
+                "provider": "openai",
+                "model": model,
+                "settings": {
+                    "language": language or "auto",
+                    "speakerDiarization": speaker_diarization,
+                    "profanityFilter": False,
+                    "punctuation": True,
+                    "customVocabulary": []
+                }
+            },
+            "processing": {
+                "status": "uploaded",
+                "progress": 0,
+                "startedAt": None,
+                "completedAt": None,
+                "error": None,
+                "retryCount": 0,
+                "lastRetryAt": None
+            },
+            "queue": {
+                "priority": 5,
+                "attempts": 0,
+                "maxAttempts": 3,
+                "nextRetryAt": None
+            },
+            "createdAt": datetime.utcnow(),
+            "updatedAt": datetime.utcnow()
+        }
         
-        # Generate task ID for React Native app compatibility
-        task_id = str(result.inserted_id)
+        # Save to database
+        media_collection = await get_collection("media_files")
+        media_result = await media_collection.insert_one(media_file_data)
+        
+        # Link job to media file
+        job_data["mediaFileId"] = media_result.inserted_id
+        
+        jobs_collection = await get_collection("processing_jobs")
+        job_result = await jobs_collection.insert_one(job_data)
+        
+        # Estimate processing time (rough calculation: 1 second per 10 seconds of audio)
+        estimated_processing_time = int((duration or 60) / 10) if duration else 60
         
         logger.info(f"File uploaded successfully: {unique_filename}", extra={
             "user_id": current_user["id"],
+            "job_id": job_id,
             "file_size": actual_file_size,
             "file_type": file_type_enum
         })
         
-        return UploadResponse(
-            file_id=str(result.inserted_id),
-            file_name=unique_filename,
-            original_name=original_filename or file.filename,
-            file_size=actual_file_size,
-            file_type=file_type_enum,
-            mime_type=file.content_type,
-            upload_date=media_file_data["created_at"],
-            task_id=task_id
-        )
+        return {
+            "job_id": job_id,
+            "status": "uploaded",
+            "file_info": {
+                "original_name": file.filename,
+                "file_size": actual_file_size,
+                "mime_type": file.content_type,
+                "duration": duration
+            },
+            "estimated_processing_time": estimated_processing_time,
+            "created_at": datetime.utcnow().isoformat()
+        }
         
     except HTTPException:
         raise
@@ -105,49 +192,109 @@ async def upload_file(
         logger.error(f"File upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="File upload failed")
 
-@router.get("/{job_id}/status", response_model=ProgressResponse)
-async def get_upload_status(job_id: str, current_user = Depends(get_current_user)):
-    """Get upload/processing status"""
+@router.get("/{job_id}")
+async def get_transcription_status(job_id: str, current_user = Depends(get_current_user)):
+    """Get transcription status and results"""
     try:
         # Try to get from Redis first (real-time progress)
         progress_data = await get_progress(job_id)
         if progress_data:
-            return ProgressResponse(**progress_data)
+            return await format_job_response(progress_data, current_user["id"])
         
         # If not in Redis, get from database
         collection = await get_collection("processing_jobs")
         job = await collection.find_one({
-            "job_id": job_id,
-            "user": current_user["id"]
+            "jobId": job_id,
+            "userId": current_user["id"]
         })
         
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         
-        # Get media file name
-        media_collection = await get_collection("media_files")
-        media_file = await media_collection.find_one({"_id": job["media_file"]})
-        
-        progress_response = ProgressResponse(
-            task_id=job_id,
-            file_name=media_file["original_name"] if media_file else "Unknown",
-            status=job["status"],
-            progress=job["progress"],
-            stage=job["current_stage"],
-            message=job["error"]["message"] if job.get("error") else None,
-            start_time=int(job["started_at"].timestamp() * 1000) if job.get("started_at") else None,
-            estimated_time_remaining=job.get("estimated_time_remaining"),
-            result=job.get("result"),
-            error=job["error"]["message"] if job.get("error") else None
-        )
-        
-        return progress_response
+        return await format_job_response(job, current_user["id"])
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get upload status error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get upload status")
+        logger.error(f"Get transcription status error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get transcription status")
+
+async def format_job_response(job_data: dict, user_id: str) -> dict:
+    """Format job data to match OpenAPI specification"""
+    try:
+        # Get media file info
+        media_file = None
+        if job_data.get("mediaFileId"):
+            media_collection = await get_collection("media_files")
+            media_file = await media_collection.find_one({"_id": job_data["mediaFileId"]})
+        
+        # Get transcription results if completed
+        results = None
+        if job_data.get("processing", {}).get("status") == "completed":
+            results_collection = await get_collection("transcription_results")
+            transcription_result = await results_collection.find_one({"jobId": job_data["jobId"]})
+            if transcription_result:
+                results = {
+                    "text": transcription_result["full_text"],
+                    "language": transcription_result["language"],
+                    "confidence": transcription_result["confidence"],
+                    "duration": transcription_result.get("duration", 0),
+                    "words": [
+                        {
+                            "word": segment.get("text", ""),
+                            "start": segment.get("start_time", 0),
+                            "end": segment.get("end_time", 0),
+                            "confidence": segment.get("confidence", 0)
+                        }
+                        for segment in transcription_result.get("segments", [])
+                    ],
+                    "segments": [
+                        {
+                            "id": i,
+                            "start": segment.get("start_time", 0),
+                            "end": segment.get("end_time", 0),
+                            "text": segment.get("text", ""),
+                            "speaker": segment.get("speaker"),
+                            "confidence": segment.get("confidence", 0)
+                        }
+                        for i, segment in enumerate(transcription_result.get("segments", []))
+                    ],
+                    "speakers": []  # TODO: Implement speaker diarization
+                }
+        
+        # Format response
+        response = {
+            "job_id": job_data["jobId"],
+            "status": job_data.get("processing", {}).get("status", "uploaded"),
+            "progress": job_data.get("processing", {}).get("progress", 0),
+            "file_info": {
+                "original_name": media_file.get("originalName", "Unknown") if media_file else "Unknown",
+                "file_size": media_file.get("fileSize", 0) if media_file else 0,
+                "mime_type": media_file.get("mimeType", "unknown") if media_file else "unknown",
+                "duration": media_file.get("duration") if media_file else None
+            },
+            "settings": job_data.get("job", {}).get("settings", {}),
+            "results": results,
+            "processing_info": {
+                "started_at": job_data.get("processing", {}).get("startedAt"),
+                "completed_at": job_data.get("processing", {}).get("completedAt"),
+                "processing_time": None,  # TODO: Calculate processing time
+                "cost": 0.0  # TODO: Implement cost calculation
+            },
+            "error": job_data.get("processing", {}).get("error"),
+            "created_at": job_data.get("createdAt"),
+            "updated_at": job_data.get("updatedAt")
+        }
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error formatting job response: {e}")
+        return {
+            "job_id": job_data.get("jobId", "unknown"),
+            "status": "failed",
+            "error": str(e)
+        }
 
 @router.delete("/{job_id}")
 async def delete_upload(job_id: str, current_user = Depends(get_current_user)):
@@ -190,6 +337,139 @@ async def delete_upload(job_id: str, current_user = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Delete upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete upload")
+
+@router.get("/jobs")
+async def get_transcription_jobs(
+    status: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    current_user = Depends(get_current_user)
+):
+    """Get user's transcription jobs"""
+    try:
+        # Validate parameters
+        if limit < 1 or limit > 100:
+            limit = 20
+        if offset < 0:
+            offset = 0
+            
+        if status and status not in ["queued", "processing", "completed", "failed"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid status. Valid values: queued, processing, completed, failed"
+            )
+        
+        # Build query
+        query = {"user": current_user["id"]}
+        if status:
+            # Convert status names to match JobStatus enum
+            status_mapping = {
+                "queued": JobStatus.PENDING,
+                "processing": JobStatus.PROCESSING,
+                "completed": JobStatus.COMPLETED,
+                "failed": JobStatus.FAILED
+            }
+            query["status"] = status_mapping.get(status, status)
+        
+        # Get jobs with pagination
+        collection = await get_collection("processing_jobs")
+        
+        # Get total count
+        total = await collection.count_documents(query)
+        
+        # Get jobs with pagination
+        jobs = await collection.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(None)
+        
+        # Format response
+        formatted_jobs = []
+        for job in jobs:
+            # Get media file info
+            media_collection = await get_collection("media_files")
+            media_file = await media_collection.find_one({"_id": job["media_file"]})
+            
+            # Get transcription results if completed
+            result = None
+            if job["status"] == JobStatus.COMPLETED:
+                results_collection = await get_collection("transcription_results")
+                transcription_result = await results_collection.find_one({"job_id": job["job_id"]})
+                if transcription_result:
+                    result = {
+                        "text": transcription_result["full_text"],
+                        "language": transcription_result["language"],
+                        "confidence": transcription_result["confidence"],
+                        "duration": transcription_result.get("duration", 0),
+                        "words": transcription_result.get("segments", [])
+                    }
+            
+            formatted_job = {
+                "job_id": job["job_id"],
+                "status": job["status"].value.lower(),
+                "progress": job["progress"],
+                "file_info": {
+                    "original_name": media_file["original_name"] if media_file else "Unknown",
+                    "file_size": media_file["file_size"] if media_file else 0,
+                    "mime_type": media_file["mime_type"] if media_file else "unknown",
+                    "duration": media_file.get("duration") if media_file else None
+                },
+                "settings": {
+                    "language": job.get("source_language", "auto"),
+                    "model": "whisper-1",  # Default model
+                    "speaker_diarization": False  # Default setting
+                },
+                "results": result,
+                "processing_info": {
+                    "started_at": job.get("started_at"),
+                    "completed_at": job.get("completed_at"),
+                    "processing_time": job.get("processing_time", 0) / 1000 if job.get("processing_time") else None,
+                    "cost": 0.0  # Default cost
+                },
+                "error": job.get("error", {}).get("message") if job.get("error") else None,
+                "created_at": job["created_at"],
+                "updated_at": job["updated_at"]
+            }
+            
+            formatted_jobs.append(formatted_job)
+        
+        # Calculate statistics
+        stats_pipeline = [
+            {"$match": {"user": current_user["id"]}},
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        status_counts = await collection.aggregate(stats_pipeline).to_list(None)
+        stats = {status.value.lower(): 0 for status in JobStatus}
+        
+        for status_count in status_counts:
+            if isinstance(status_count["_id"], JobStatus):
+                stats[status_count["_id"].value.lower()] = status_count["count"]
+        
+        return {
+            "jobs": formatted_jobs,
+            "pagination": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_next": offset + limit < total
+            },
+            "stats": {
+                "total_processing": total,
+                "completed": stats["completed"],
+                "failed": stats["failed"],
+                "queued": stats["pending"]
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get transcription jobs error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get transcription jobs"
+        )
 
 @router.get("/history")
 async def get_upload_history(
@@ -270,6 +550,139 @@ async def get_upload_history(
     except Exception as e:
         logger.error(f"Get upload history error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get upload history")
+
+@router.get("/{job_id}/download")
+async def download_transcription(
+    job_id: str,
+    format: str = "json",
+    current_user = Depends(get_current_user)
+):
+    """Download transcription results in various formats"""
+    try:
+        if format not in ["json", "txt", "srt", "vtt"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid format. Supported formats: json, txt, srt, vtt"
+            )
+        
+        # Get transcription result
+        jobs_collection = await get_collection("processing_jobs")
+        job = await jobs_collection.find_one({
+            "job_id": job_id,
+            "user": current_user["id"],
+            "status": JobStatus.COMPLETED
+        })
+        
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Transcription not found or not completed"
+            )
+        
+        # Get transcription results from separate collection if exists
+        results_collection = await get_collection("transcription_results")
+        transcription_result = await results_collection.find_one({"job_id": job_id})
+        
+        if not transcription_result:
+            raise HTTPException(
+                status_code=404,
+                detail="Transcription results not found"
+            )
+        
+        # Generate content based on format
+        if format == "json":
+            content = {
+                "job_id": job_id,
+                "text": transcription_result["full_text"],
+                "language": transcription_result["language"],
+                "confidence": transcription_result["confidence"],
+                "duration": transcription_result.get("duration", 0),
+                "segments": transcription_result.get("segments", []),
+                "metadata": transcription_result.get("metadata", {}),
+                "created_at": transcription_result["created_at"]
+            }
+            from fastapi.responses import JSONResponse
+            return JSONResponse(content=content)
+        
+        elif format == "txt":
+            content = transcription_result["full_text"]
+            media_type = "text/plain"
+            filename = f"transcription_{job_id}.txt"
+        
+        elif format == "srt":
+            content = _generate_srt_content(transcription_result.get("segments", []))
+            media_type = "text/plain"
+            filename = f"transcription_{job_id}.srt"
+        
+        elif format == "vtt":
+            content = _generate_vtt_content(transcription_result.get("segments", []))
+            media_type = "text/vtt"
+            filename = f"transcription_{job_id}.vtt"
+        
+        from fastapi.responses import Response
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download transcription error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to download transcription"
+        )
+
+def _generate_srt_content(segments: list) -> str:
+    """Generate SRT format content"""
+    srt_content = []
+    
+    for i, segment in enumerate(segments, 1):
+        start_time = _format_srt_time(segment.get("start_time", 0))
+        end_time = _format_srt_time(segment.get("end_time", 0))
+        text = segment.get("text", "")
+        
+        srt_content.append(f"{i}")
+        srt_content.append(f"{start_time} --> {end_time}")
+        srt_content.append(text)
+        srt_content.append("")  # Empty line between segments
+    
+    return "\\n".join(srt_content)
+
+def _generate_vtt_content(segments: list) -> str:
+    """Generate WebVTT format content"""
+    vtt_content = ["WEBVTT", ""]
+    
+    for segment in segments:
+        start_time = _format_vtt_time(segment.get("start_time", 0))
+        end_time = _format_vtt_time(segment.get("end_time", 0))
+        text = segment.get("text", "")
+        
+        vtt_content.append(f"{start_time} --> {end_time}")
+        vtt_content.append(text)
+        vtt_content.append("")  # Empty line between segments
+    
+    return "\\n".join(vtt_content)
+
+def _format_srt_time(seconds: float) -> str:
+    """Format time for SRT (HH:MM:SS,mmm)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    milliseconds = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+
+def _format_vtt_time(seconds: float) -> str:
+    """Format time for WebVTT (HH:MM:SS.mmm)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    milliseconds = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
 async def get_file_size(file: UploadFile) -> int:
     """Get actual file size from UploadFile"""

@@ -27,6 +27,8 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
-        log_level="info",
-        access_log=True
+        log_level="debug",  # Changed from "info" to "debug"
+        access_log=True,
+        use_colors=True,
+        workers=1
     )

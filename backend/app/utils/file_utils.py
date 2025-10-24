@@ -32,6 +32,20 @@ def generate_unique_filename(original_name: str) -> str:
     # Generate new filename
     return f"{timestamp}_{unique_id}{extension}"
 
+async def get_file_size(file: UploadFile) -> int:
+    """Get actual file size from UploadFile"""
+    # Reset file position to start
+    await file.seek(0)
+    
+    # Read file content to get size
+    content = await file.read()
+    size = len(content)
+    
+    # Reset file position to start for future reads
+    await file.seek(0)
+    
+    return size
+
 def get_file_size_formatted(size_bytes: int) -> str:
     """Convert bytes to human readable format"""
     if size_bytes == 0:

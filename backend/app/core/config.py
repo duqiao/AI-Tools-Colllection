@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "AI Media Translation API"
     VERSION: str = "1.0.0"
-    DEBUG: bool = False
+    DEBUG: bool = True
     
     # Server
     HOST: str = "127.0.0.1"
@@ -18,7 +18,10 @@ class Settings(BaseSettings):
         "http://localhost:8001",
         "http://localhost:8094",
         "http://localhost:19006", 
-        "exp://localhost:19000"
+        "exp://localhost:19000",
+        "http://127.0.0.1:8001",
+        "http://127.0.0.1:19006",
+        "*",  # Allow all origins for development
     ]
     
     # Allow CORS_ORIGINS from environment (will be parsed)
@@ -32,7 +35,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "your-super-secret-jwt-key-change-this-in-production"
     JWT_REFRESH_SECRET: str = "your-super-secret-refresh-key-change-this-in-production"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours for development (was 15 minutes)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     
     # File Upload
