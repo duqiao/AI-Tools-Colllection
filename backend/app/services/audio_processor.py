@@ -178,6 +178,22 @@ class AudioProcessor:
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             return False
     
+    async def _is_optimal_wav_format(self, audio_path: str) -> bool:
+        """Check if WAV file is in optimal format (16kHz mono, 16-bit)"""
+        try:
+            media_info = await self.get_media_info(audio_path)
+            
+            # Check format, sample rate, channels
+            format_ok = media_info.get('format_name') == 'wav'
+            sample_rate_ok = media_info.get('sample_rate') == 16000
+            channels_ok = media_info.get('channels') == 1
+            
+            return format_ok and sample_rate_ok and channels_ok
+            
+        except Exception as e:
+            logger.warning(f"Failed to check WAV format: {e}")
+            return False
+    
     def get_supported_formats(self) -> dict:
         """Get supported audio/video formats"""
         return {

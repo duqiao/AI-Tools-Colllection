@@ -62,8 +62,9 @@ class Settings(BaseSettings):
     ]
     
     # Speech-to-Text
-    STT_PROVIDER: str = "openai"  # openai, google, azure, ollama, mock
+    STT_PROVIDER: str = "openai"  # openai, deepseek_api, google, azure, ollama, mock
     OPENAI_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
     WHISPER_MODEL: str = "base"  # tiny, base, small, medium, large
     FALLBACK_STT_PROVIDER: str = "mock"  # Fallback if provider fails
     

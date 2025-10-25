@@ -65,7 +65,11 @@
       "Bash(docker start:*)",
       "Bash(\"backend\\venv\\Scripts\\python.exe\":*)",
       "Bash(\"venv\\Scripts\\python.exe\" run.py)",
-      "Bash(\"venv\\Scripts\\python.exe\" run_windows.py)"
+      "Bash(\"venv\\Scripts\\python.exe\" run_windows.py)",
+      "Bash(\"./venv/Scripts/python.exe\":*)",
+      "Bash(ffmpeg:*)",
+      "Bash(where:*)",
+      "Bash(start:*)"
     ],
     "deny": []
   }

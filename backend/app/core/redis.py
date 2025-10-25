@@ -1,10 +1,19 @@
 import redis.asyncio as redis
 import logging
 from typing import Optional
+from datetime import datetime
+import json
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+class DateTimeJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 class RedisConnection:
     client: Optional[redis.Redis] = None
@@ -86,11 +95,10 @@ async def set_user_cache(user_id: str, data: dict, expire_seconds: int = 3600):
     """Set user data in cache"""
     try:
         client = await get_redis()
-        import json
         await client.setex(
             f"user:{user_id}",
             expire_seconds,
-            json.dumps(data)
+            json.dumps(data, cls=DateTimeJSONEncoder)
         )
         return True
     except Exception as e:

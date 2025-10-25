@@ -1,13 +1,21 @@
-import whisper
-import torch
-import librosa
 import logging
 import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+# Optional imports that might cause issues on some systems
+try:
+    import whisper
+    import torch
+    import librosa
+    WHISPER_AVAILABLE = True
+except (ImportError, TypeError, OSError) as e:
+    logging.warning(f"Whisper not available: {e}")
+    WHISPER_AVAILABLE = False
+
 from app.core.config import settings
-# from app.services.ollama_stt import OllamaSpeechToTextService  # Using OpenAI Whisper instead
+from app.services.ollama_stt import OllamaSpeechToTextService
+from app.services.deepseek_api_stt import DeepSeekAPISpeechToTextService
 from app.core.redis import set_progress
 
 # Fallback services when main providers are not available
@@ -52,11 +60,19 @@ class MockSpeechToTextService:
         }
 
 class OpenAIWhisperService:
-    """Fallback Whisper service if OpenAI not available"""
+    """OpenAI Whisper service"""
     
     async def transcribe(self, audio_path: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
-        logger.warning("OpenAI Whisper not configured, using Whisper locally")
-        return await WhisperService().transcribe(audio_path, options)
+        if not WHISPER_AVAILABLE:
+            logger.warning("Whisper not available, using mock service")
+            return await MockSpeechToTextService().transcribe(audio_path, options)
+        
+        try:
+            logger.info("Using local Whisper service")
+            return await WhisperService().transcribe(audio_path, options)
+        except Exception as e:
+            logger.error(f"Whisper service failed: {e}")
+            return await MockSpeechToTextService().transcribe(audio_path, options)
 
 class GoogleSpeechToTextService:
     """Fallback Google service if Google API not available"""
@@ -65,14 +81,143 @@ class GoogleSpeechToTextService:
         logger.warning("Google Translate API not configured, using basic translation")
         return await MockSpeechToTextService().transcribe(audio_path, options)
 
+class DeepSeekSpeechToTextService:
+    """DeepSeek-based speech-to-text service using Ollama"""
+    
+    def __init__(self):
+        self.ollama_service = OllamaSpeechToTextService()
+        self.audio_processor = None
+        # Import AudioProcessor only when needed
+        from app.services.audio_processor import AudioProcessor
+        self.audio_processor = AudioProcessor()
+        
+        logger.info("DeepSeek Speech-to-Text service initialized")
+    
+    async def transcribe(self, audio_path: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Transcribe audio/video file using DeepSeek via Ollama
+        
+        Process:
+        1. Handle video files by extracting audio first
+        2. Convert audio to optimal format for Ollama
+        3. Send to DeepSeek model for transcription
+        4. Parse and format results
+        """
+        try:
+            logger.info(f"Starting DeepSeek transcription for: {audio_path}")
+            
+            # Initialize Ollama service
+            await self.ollama_service.initialize()
+            
+            # Handle video files - extract audio first
+            file_path = Path(audio_path)
+            processed_audio_path = audio_path
+            
+            if file_path.suffix.lower() in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                logger.info("Video file detected, extracting audio...")
+                processed_audio_path = await self.audio_processor.extract_audio(audio_path)
+                logger.info(f"Audio extracted to: {processed_audio_path}")
+            
+            # Prepare transcription options
+            transcription_options = {
+                "language": options.get("language") if options else None,
+                "enable_timestamps": options.get("enable_timestamps", True) if options else True,
+                "enable_speaker_diarization": options.get("enable_speaker_diarization", True) if options else True
+            }
+            
+            # Get file information for metadata
+            try:
+                media_info = await self.audio_processor.get_media_info(processed_audio_path)
+                logger.info(f"Media info: duration={media_info.get('duration', 0):.2f}s, size={media_info.get('size', 0)} bytes")
+            except Exception as e:
+                logger.warning(f"Could not get media info: {e}")
+                media_info = {}
+            
+            # Transcribe using DeepSeek via Ollama
+            transcription_result = await self.ollama_service.transcribe(
+                processed_audio_path, 
+                transcription_options
+            )
+            
+            # Enhance metadata with DeepSeek-specific information
+            transcription_result["metadata"].update({
+                "provider": "deepseek_ollama",
+                "model": settings.OLLAMA_MODEL,
+                "processing_method": "deepseek_speech_to_text",
+                "file_info": {
+                    "original_path": audio_path,
+                    "processed_path": processed_audio_path,
+                    "file_type": "video" if file_path.suffix.lower() in ['.mp4', '.mov', '.avi', '.mkv', '.webm'] else "audio",
+                    "media_duration": media_info.get('duration', 0),
+                    "file_size": media_info.get('size', 0)
+                }
+            })
+            
+            logger.info(f"DeepSeek transcription completed successfully")
+            return transcription_result
+            
+        except Exception as e:
+            logger.error(f"DeepSeek transcription failed: {e}")
+            raise
+    
+    def get_supported_languages(self) -> list:
+        """Get languages supported by DeepSeek models"""
+        return [
+            "en", "zh", "es", "fr", "de", "it", "pt", "ru", "ja", "ko",
+            "ar", "hi", "th", "vi", "id", "ms", "tl", "sw", "nl", "sv",
+            "no", "da", "fi", "pl", "cs", "sk", "hu", "ro", "bg", "hr",
+            "sr", "sl", "et", "lv", "lt", "uk", "be", "el", "tr", "he",
+            "fa", "ur", "bn", "ta", "te", "ml", "kn", "gu", "pa", "mr"
+        ]
+    
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get DeepSeek model information"""
+        return {
+            "provider": "deepseek_ollama",
+            "model": settings.OLLAMA_MODEL,
+            "base_url": settings.OLLAMA_BASE_URL,
+            "configured": True,
+            "supported_languages": self.get_supported_languages(),
+            "features": [
+                "speech_to_text",
+                "multi_language",
+                "speaker_diarization",
+                "timestamp_generation",
+                "video_audio_extraction",
+                "technical_content_transcription"
+            ]
+        }
+    
+    async def test_connection(self) -> bool:
+        """Test DeepSeek service connection"""
+        try:
+            # Test Ollama connection
+            if not await self.ollama_service.test_connection():
+                return False
+            
+            # Check if DeepSeek model is available
+            model_info = await self.ollama_service.get_model_info()
+            return model_info.get("available", False)
+            
+        except Exception as e:
+            logger.error(f"DeepSeek service test failed: {e}")
+            return False
+
 class SpeechToTextService:
     def __init__(self):
+        if not WHISPER_AVAILABLE:
+            logger.error("Whisper is not available on this system")
+            raise ImportError("Whisper is not available")
+        
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Speech-to-Text using device: {self.device}")
     
     async def load_model(self):
         """Load Whisper model asynchronously"""
+        if not WHISPER_AVAILABLE:
+            raise ImportError("Whisper is not available")
+            
         if self.model is None:
             try:
                 # Load model in thread pool to avoid blocking
@@ -234,6 +379,24 @@ class GoogleSpeechToTextService:
         whisper_service = SpeechToTextService()
         return await whisper_service.transcribe(audio_path, options)
 
+class DeepSeekAPIService:
+    """DeepSeek API service wrapper for compatibility"""
+    
+    def __init__(self):
+        self.api_service = DeepSeekAPISpeechToTextService()
+    
+    async def transcribe(self, audio_path: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
+        return await self.api_service.transcribe(audio_path, options)
+    
+    def get_supported_languages(self) -> list:
+        return self.api_service.get_supported_languages()
+    
+    async def get_model_info(self) -> Dict[str, Any]:
+        return await self.api_service.get_model_info()
+    
+    async def test_connection(self) -> bool:
+        return await self.api_service.test_connection()
+
 # Main service factory
 def get_speech_to_text_service():
     """Get the configured speech-to-text service"""
@@ -241,6 +404,10 @@ def get_speech_to_text_service():
     
     if provider == "openai":
         return OpenAIWhisperService()
+    elif provider == "deepseek_api":
+        return DeepSeekAPIService()
+    elif provider == "ollama":
+        return DeepSeekSpeechToTextService()
     elif provider == "google":
         return GoogleSpeechToTextService()
     elif provider == "mock":

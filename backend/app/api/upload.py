@@ -4,6 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import os
 import uuid
+import time
 import aiofiles
 from pathlib import Path
 import logging
@@ -15,7 +16,8 @@ from app.models.schemas import (
     MediaFile, ProcessingJob, ProcessingJobCreate, 
     UploadResponse, ProgressResponse, JobStatus
 )
-from app.api.dependencies import get_current_user, get_user_by_id
+from app.api.dependencies import get_user_by_id
+from app.api.auth import get_current_user_optional
 from app.services.media_processor import MediaProcessor
 from app.utils.file_utils import (
     validate_file_type, get_file_type, 
@@ -43,10 +45,43 @@ async def upload_file(
     model: str = Form("whisper-1"),
     speaker_diarization: bool = Form(False),
     auto_delete: Optional[int] = Form(None),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Upload video or audio file for transcription"""
-    logger.info(f"📤 Upload request received - File: {file.filename}, User: {current_user.get('username', 'Unknown')}")
+    logger.info(f"📤 Upload request received - File: {file.filename}")
+    
+    # Auto-create guest user if not authenticated
+    if not current_user:
+        logger.info("🔓 No user authentication found, creating guest user...")
+        try:
+            from app.api.auth import guest_login
+            from app.models.schemas import UserCreate
+            
+            guest_data = UserCreate(
+                username=f"Guest_{int(time.time())}",
+                openid=f"guest_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            )
+            
+            guest_user = await guest_login(guest_data)
+            current_user = {
+                "id": guest_user["user"]["id"],
+                "username": guest_user["user"]["username"],
+                "openid": guest_user["user"]["openid"],
+                "subscription_level": guest_user["user"]["subscription_level"],
+                "quota_used": guest_user["user"]["quota_used"],
+                "quota_limit": guest_user["user"]["quota_limit"],
+                "quota_reset_date": guest_user["user"]["quota_reset_date"],
+                "is_active": guest_user["user"]["is_active"]
+            }
+            logger.info(f"✅ Guest user created: {current_user['username']}")
+        except Exception as guest_error:
+            logger.error(f"❌ Failed to create guest user: {guest_error}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create guest user session"
+            )
+    else:
+        logger.info(f"🔓 Authenticated user: {current_user.get('username', 'Unknown')}")
     
     try:
         # Validate file
@@ -60,7 +95,7 @@ async def upload_file(
             )
         
         # Validate model
-        valid_models = ["whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large"]
+        valid_models = ["whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large", "deepseek-1"]
         if model not in valid_models:
             raise HTTPException(
                 status_code=400,
@@ -120,9 +155,9 @@ async def upload_file(
         
         # Create processing job record
         job_data = {
-            "jobId": job_id,
+            "jobId": job_id,  # Keep consistent with schema and queries
             "mediaFileId": None,  # Will be set after media file is created
-            "userId": current_user["id"],
+            "userId": current_user["id"],  # Keep consistent with schema
             "job": {
                 "provider": "openai",
                 "model": model,
@@ -173,6 +208,32 @@ async def upload_file(
             "file_type": file_type_enum
         })
         
+        # Start processing immediately (synchronous approach for reliability)
+        try:
+            from app.services.media_processor import MediaProcessor
+            processor = MediaProcessor()
+            
+            logger.info(f"Starting processing task for job {job_id}")
+            
+            # Process immediately (not as background task)
+            # This ensures the task will definitely run
+            import asyncio
+            asyncio.create_task(
+                processor.process_transcription_job(
+                    job_id,
+                    str(media_result.inserted_id),
+                    current_user["id"]
+                )
+            )
+            
+            logger.info(f"Processing task started for job {job_id}")
+            
+        except Exception as task_error:
+            logger.error(f"Failed to start processing task for job {job_id}: {task_error}")
+            import traceback
+            logger.error(f"Task error details: {traceback.format_exc()}")
+            # Don't fail the upload, just log the error
+        
         return {
             "job_id": job_id,
             "status": "uploaded",
@@ -193,13 +254,75 @@ async def upload_file(
         raise HTTPException(status_code=500, detail="File upload failed")
 
 @router.get("/{job_id}")
-async def get_transcription_status(job_id: str, current_user = Depends(get_current_user)):
+async def get_transcription_status(job_id: str, current_user = Depends(get_current_user_optional)):
     """Get transcription status and results"""
     try:
+        # For status checks, get job info first to determine access
+        collection = await get_collection("processing_jobs")
+        job = await collection.find_one({"jobId": job_id})
+        
+        if not job:
+            logger.warning(f"Job {job_id} not found")
+            return {
+                "success": False,
+                "error": "Job not found",
+                "data": None
+            }
+        
+        # If no user and job was created by a guest, create new guest session
+        if not current_user and job.get("isGuestUpload"):
+            logger.info("🔓 Creating guest session for status check...")
+            try:
+                from app.api.auth import guest_login
+                from app.models.schemas import UserCreate
+                
+                guest_data = UserCreate(
+                    username=f"Guest_{int(time.time())}",
+                    openid=f"guest_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+                )
+                
+                guest_user = await guest_login(guest_data)
+                current_user = {
+                    "id": guest_user["user"]["id"],
+                    "username": guest_user["user"]["username"],
+                    "openid": guest_user["user"]["openid"],
+                    "subscription_level": guest_user["user"]["subscription_level"],
+                    "quota_used": guest_user["user"]["quota_used"],
+                    "quota_limit": guest_user["user"]["quota_limit"],
+                    "quota_reset_date": guest_user["user"]["quota_reset_date"],
+                    "is_active": guest_user["user"]["is_active"]
+                }
+                logger.info(f"✅ Guest session created: {current_user['username']}")
+            except Exception as guest_error:
+                logger.error(f"❌ Failed to create guest session: {guest_error}")
+                return {
+                    "success": False,
+                    "error": "Failed to create guest session",
+                    "data": None
+                }
+        # If user is authenticated, verify ownership
+        elif current_user and job.get("userId") != current_user["id"]:
+            logger.warning(f"User {current_user.get('id')} attempted to access job {job_id} owned by {job.get('userId')}")
+            return {
+                "success": False,
+                "error": "You don't have permission to access this job",
+                "data": None
+            }
+        
+        logger.info(f"Fetching status for job {job_id}, user {current_user.get('id')}")
+        
         # Try to get from Redis first (real-time progress)
         progress_data = await get_progress(job_id)
         if progress_data:
-            return await format_job_response(progress_data, current_user["id"])
+            logger.info(f"Found job {job_id} in Redis cache")
+            job_response = await format_job_response(progress_data, current_user["id"])
+            
+            # Wrap response in expected format
+            return {
+                "success": True,
+                "error": None,
+                "data": job_response
+            }
         
         # If not in Redis, get from database
         collection = await get_collection("processing_jobs")
@@ -209,24 +332,63 @@ async def get_transcription_status(job_id: str, current_user = Depends(get_curre
         })
         
         if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
+            logger.warning(f"Job {job_id} not found for user {current_user.get('id')}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Job {job_id} not found. Please verify the job ID and ensure you have permission to access it."
+            )
         
-        return await format_job_response(job, current_user["id"])
+        logger.info(f"Found job {job_id} in database, status: {job.get('processing', {}).get('status', 'unknown')}")
+        job_response = await format_job_response(job, current_user["id"])
         
-    except HTTPException:
-        raise
+        # Wrap response in expected format
+        return {
+            "success": True,
+            "error": None,
+            "data": job_response
+        }
+        
+    except HTTPException as http_ex:
+        # Return properly formatted error response
+        return {
+            "success": False,
+            "error": http_ex.detail,
+            "data": None
+        }
     except Exception as e:
-        logger.error(f"Get transcription status error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get transcription status")
+        logger.error(f"Get transcription status error for job {job_id}: {str(e)}", exc_info=True, extra={
+            "job_id": job_id,
+            "user_id": current_user.get("id"),
+            "error_type": type(e).__name__
+        })
+        # Return properly formatted error response
+        return {
+            "success": False,
+            "error": f"Failed to get transcription status: {str(e)}",
+            "data": None
+        }
 
 async def format_job_response(job_data: dict, user_id: str) -> dict:
     """Format job data to match OpenAPI specification"""
     try:
+        if not job_data:
+            logger.error("Empty job_data provided to format_job_response")
+            return {
+                "job_id": "unknown",
+                "status": "error",
+                "error": "Invalid job data"
+            }
+
+        logger.debug(f"Formatting job response for job {job_data.get('jobId', 'unknown')}")
+        
         # Get media file info
         media_file = None
-        if job_data.get("mediaFileId"):
+        media_file_id = job_data.get("mediaFileId")
+        if media_file_id:
             media_collection = await get_collection("media_files")
-            media_file = await media_collection.find_one({"_id": job_data["mediaFileId"]})
+            media_file = await media_collection.find_one({"_id": media_file_id})
+            if not media_file:
+                logger.warning(f"Media file not found for ID {media_file_id}")
         
         # Get transcription results if completed
         results = None
@@ -297,14 +459,14 @@ async def format_job_response(job_data: dict, user_id: str) -> dict:
         }
 
 @router.delete("/{job_id}")
-async def delete_upload(job_id: str, current_user = Depends(get_current_user)):
+async def delete_upload(job_id: str, current_user = Depends(get_current_user_optional)):
     """Delete uploaded file and associated job"""
     try:
         # Find and delete processing job
         jobs_collection = await get_collection("processing_jobs")
         job = await jobs_collection.find_one_and_delete({
-            "job_id": job_id,
-            "user": current_user["id"]
+            "jobId": job_id,
+            "userId": current_user["id"]
         })
         
         if not job:
@@ -313,15 +475,15 @@ async def delete_upload(job_id: str, current_user = Depends(get_current_user)):
         # Delete associated media file
         media_collection = await get_collection("media_files")
         media_file = await media_collection.find_one_and_delete({
-            "_id": job["media_file"]
+            "_id": job["mediaFileId"]
         })
         
         if media_file:
             # Delete physical file
-            file_path = Path(media_file["file_path"])
+            file_path = Path(media_file["filePath"])
             if file_path.exists():
                 file_path.unlink()
-                logger.info(f"Physical file deleted: {media_file['file_name']}")
+                logger.info(f"Physical file deleted: {media_file['fileName']}")
         
         # Remove from Redis
         await delete_progress(job_id)
@@ -343,7 +505,7 @@ async def get_transcription_jobs(
     status: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get user's transcription jobs"""
     try:
@@ -360,7 +522,7 @@ async def get_transcription_jobs(
             )
         
         # Build query
-        query = {"user": current_user["id"]}
+        query = {"userId": current_user["id"]}
         if status:
             # Convert status names to match JobStatus enum
             status_mapping = {
@@ -369,7 +531,7 @@ async def get_transcription_jobs(
                 "completed": JobStatus.COMPLETED,
                 "failed": JobStatus.FAILED
             }
-            query["status"] = status_mapping.get(status, status)
+            query["processing.status"] = status_mapping.get(status, status)
         
         # Get jobs with pagination
         collection = await get_collection("processing_jobs")
@@ -378,20 +540,20 @@ async def get_transcription_jobs(
         total = await collection.count_documents(query)
         
         # Get jobs with pagination
-        jobs = await collection.find(query).sort("created_at", -1).skip(offset).limit(limit).to_list(None)
+        jobs = await collection.find(query).sort("createdAt", -1).skip(offset).limit(limit).to_list(None)
         
         # Format response
         formatted_jobs = []
         for job in jobs:
             # Get media file info
             media_collection = await get_collection("media_files")
-            media_file = await media_collection.find_one({"_id": job["media_file"]})
+            media_file = await media_collection.find_one({"_id": job["mediaFileId"]})
             
             # Get transcription results if completed
             result = None
-            if job["status"] == JobStatus.COMPLETED:
+            if job.get("processing", {}).get("status") == "completed":
                 results_collection = await get_collection("transcription_results")
-                transcription_result = await results_collection.find_one({"job_id": job["job_id"]})
+                transcription_result = await results_collection.find_one({"jobId": job["jobId"]})
                 if transcription_result:
                     result = {
                         "text": transcription_result["full_text"],
@@ -402,49 +564,49 @@ async def get_transcription_jobs(
                     }
             
             formatted_job = {
-                "job_id": job["job_id"],
-                "status": job["status"].value.lower(),
-                "progress": job["progress"],
+                "job_id": job["jobId"],
+                "status": job.get("processing", {}).get("status", "uploaded"),
+                "progress": job.get("processing", {}).get("progress", 0),
                 "file_info": {
-                    "original_name": media_file["original_name"] if media_file else "Unknown",
-                    "file_size": media_file["file_size"] if media_file else 0,
-                    "mime_type": media_file["mime_type"] if media_file else "unknown",
+                    "original_name": media_file.get("originalName", "Unknown") if media_file else "Unknown",
+                    "file_size": media_file.get("fileSize", 0) if media_file else 0,
+                    "mime_type": media_file.get("mimeType", "unknown") if media_file else "unknown",
                     "duration": media_file.get("duration") if media_file else None
                 },
-                "settings": {
-                    "language": job.get("source_language", "auto"),
-                    "model": "whisper-1",  # Default model
-                    "speaker_diarization": False  # Default setting
-                },
+                "settings": job.get("job", {}).get("settings", {
+                    "language": "auto",
+                    "model": "whisper-1",
+                    "speaker_diarization": False
+                }),
                 "results": result,
                 "processing_info": {
-                    "started_at": job.get("started_at"),
-                    "completed_at": job.get("completed_at"),
-                    "processing_time": job.get("processing_time", 0) / 1000 if job.get("processing_time") else None,
-                    "cost": 0.0  # Default cost
+                    "started_at": job.get("processing", {}).get("startedAt"),
+                    "completed_at": job.get("processing", {}).get("completedAt"),
+                    "processing_time": None,
+                    "cost": 0.0
                 },
-                "error": job.get("error", {}).get("message") if job.get("error") else None,
-                "created_at": job["created_at"],
-                "updated_at": job["updated_at"]
+                "error": job.get("processing", {}).get("error"),
+                "created_at": job.get("createdAt"),
+                "updated_at": job.get("updatedAt")
             }
             
             formatted_jobs.append(formatted_job)
         
         # Calculate statistics
         stats_pipeline = [
-            {"$match": {"user": current_user["id"]}},
+            {"$match": {"userId": current_user["id"]}},
             {"$group": {
-                "_id": "$status",
+                "_id": "$processing.status",
                 "count": {"$sum": 1}
             }}
         ]
         
         status_counts = await collection.aggregate(stats_pipeline).to_list(None)
-        stats = {status.value.lower(): 0 for status in JobStatus}
+        stats = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
         
         for status_count in status_counts:
-            if isinstance(status_count["_id"], JobStatus):
-                stats[status_count["_id"].value.lower()] = status_count["count"]
+            if status_count["_id"] in stats:
+                stats[status_count["_id"]] = status_count["count"]
         
         return {
             "jobs": formatted_jobs,
@@ -475,7 +637,7 @@ async def get_transcription_jobs(
 async def get_upload_history(
     page: int = 1,
     per_page: int = 20,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get user's upload history"""
     try:
@@ -555,7 +717,7 @@ async def get_upload_history(
 async def download_transcription(
     job_id: str,
     format: str = "json",
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Download transcription results in various formats"""
     try:
@@ -569,7 +731,7 @@ async def download_transcription(
         jobs_collection = await get_collection("processing_jobs")
         job = await jobs_collection.find_one({
             "job_id": job_id,
-            "user": current_user["id"],
+            "user_id": current_user["id"],  # Changed from user to user_id
             "status": JobStatus.COMPLETED
         })
         

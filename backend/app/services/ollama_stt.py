@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import logging
 import json
+import time
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -57,22 +58,34 @@ class OllamaService:
                     return self.model in models
                 else:
                     return False
-            except Exception as e:
-                logger.error(f"Failed to check model availability: {e}")
-                return False
+        except Exception as e:
+            logger.error(f"Failed to check model availability: {e}")
+            return False
     
     async def transcribe(self, audio_path: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Transcribe audio using Ollama with DeepSeek/Qwen model
         
         This method handles the complexity of converting audio to text by:
-        1. Encoding audio file to base64
-        2. Prompting the model with speech-to-text instructions
-        3. Handling the response and extracting transcription
+        1. Validating audio file format
+        2. Converting audio to optimal format for Ollama
+        3. Encoding audio file to base64
+        4. Prompting the model with speech-to-text instructions
+        5. Handling the response and extracting transcription
         """
         try:
-            # Read and encode audio file
-            with open(audio_path, "rb") as audio_file:
+            # Validate audio file
+            audio_file_path = Path(audio_path)
+            if not audio_file_path.exists():
+                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+            logger.info(f"Starting Ollama transcription for: {audio_path}")
+            
+            # Convert audio to WAV format if needed (Ollama works best with WAV)
+            processed_audio_path = await self._prepare_audio_for_ollama(audio_path)
+            
+            # Read and encode processed audio file
+            with open(processed_audio_path, "rb") as audio_file:
                 audio_data = audio_file.read()
             
             # Encode to base64
@@ -89,11 +102,15 @@ class OllamaService:
                 "images": [{"data": audio_b64, "type": "audio/wav"}],
                 "options": {
                     "temperature": 0.1,
-                    "max_tokens": self.max_tokens
-                }
+                    "max_tokens": self.max_tokens,
+                    "top_p": 0.9,
+                    "top_k": 40
+                },
+                "stream": False
             }
             
             logger.info(f"Sending transcription request to Ollama for model: {self.model}")
+            logger.info(f"Audio size: {len(audio_data)} bytes, Base64 size: {len(audio_b64)} chars")
             
             # Make request
             result = await self._make_request("/api/generate", request_data)
@@ -104,24 +121,149 @@ class OllamaService:
             # Extract transcription from response
             response_text = result.get("response", "")
             
+            if not response_text:
+                logger.warning("Empty response from Ollama")
+                return self._create_empty_result(audio_path, options)
+            
+            logger.info(f"Ollama response received: {len(response_text)} chars")
+            
             # Try to parse structured response
             transcription_result = self._parse_transcription_response(response_text, options)
+            
+            # Clean up temporary audio file if we created one
+            if processed_audio_path != audio_path and Path(processed_audio_path).exists():
+                try:
+                    Path(processed_audio_path).unlink()
+                    logger.debug(f"Cleaned up temporary audio file: {processed_audio_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary file: {e}")
             
             # Add metadata
             transcription_result.update({
                 "metadata": {
-                    "audio_duration": self._estimate_audio_duration(audio_path),
+                    "audio_duration": await self._get_audio_duration(audio_path),
                     "provider": "ollama",
                     "model": self.model,
-                    "processing_method": "speech_to_text"
+                    "processing_method": "ollama_speech_to_text",
+                    "original_file": str(audio_path),
+                    "file_size": len(audio_data)
                 }
             })
             
+            logger.info(f"Ollama transcription completed successfully")
             return transcription_result
             
         except Exception as e:
             logger.error(f"Ollama transcription failed: {e}")
             raise
+    
+    async def _prepare_audio_for_ollama(self, audio_path: str) -> str:
+        """
+        Prepare audio file for Ollama processing
+        
+        Ollama works best with WAV files at 16kHz mono
+        """
+        try:
+            from app.services.audio_processor import AudioProcessor
+            audio_processor = AudioProcessor()
+            
+            audio_file_path = Path(audio_path)
+            
+            # Check if already in optimal format
+            if (audio_file_path.suffix.lower() == '.wav' and 
+                await audio_processor._is_optimal_wav_format(audio_path)):
+                return audio_path
+            
+            # Convert to optimal WAV format
+            logger.info(f"Converting audio to optimal WAV format: {audio_path}")
+            
+            # Use AudioProcessor to convert (we'll add a helper method)
+            optimal_audio_path = await self._convert_to_optimal_wav(audio_path, audio_processor)
+            
+            return optimal_audio_path
+            
+        except Exception as e:
+            logger.warning(f"Audio preparation failed, using original: {e}")
+            return audio_path
+    
+    async def _convert_to_optimal_wav(self, audio_path: str, audio_processor) -> str:
+        """Convert audio to optimal WAV format for Ollama"""
+        try:
+            import tempfile
+            import os
+            
+            # Create temporary file
+            temp_dir = tempfile.gettempdir()
+            temp_filename = f"ollama_audio_{int(time.time())}.wav"
+            temp_audio_path = os.path.join(temp_dir, temp_filename)
+            
+            # Use FFmpeg to convert to optimal format
+            cmd = [
+                'ffmpeg',
+                '-i', audio_path,
+                '-ar', '16000',  # Sample rate
+                '-ac', '1',      # Mono
+                '-c:a', 'pcm_s16le',  # 16-bit PCM
+                '-y',            # Overwrite
+                temp_audio_path
+            ]
+            
+            # Run FFmpeg in thread pool
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._run_ffmpeg, cmd)
+            
+            if not os.path.exists(temp_audio_path):
+                raise Exception("Audio conversion failed - no output file created")
+            
+            return temp_audio_path
+            
+        except Exception as e:
+            logger.error(f"Audio conversion failed: {e}")
+            raise
+    
+    def _run_ffmpeg(self, cmd: list):
+        """Run FFmpeg command synchronously"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes timeout
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr if result.stderr else "Unknown FFmpeg error"
+                raise Exception(f"FFmpeg error: {error_msg}")
+                
+        except subprocess.TimeoutExpired:
+            raise Exception("FFmpeg process timed out")
+        except Exception as e:
+            raise Exception(f"FFmpeg execution failed: {e}")
+    
+    async def _get_audio_duration(self, audio_path: str) -> float:
+        """Get actual audio duration using AudioProcessor"""
+        try:
+            from app.services.audio_processor import AudioProcessor
+            audio_processor = AudioProcessor()
+            
+            media_info = await audio_processor.get_media_info(audio_path)
+            duration = media_info.get('duration', 0)
+            
+            return float(duration)
+            
+        except Exception as e:
+            logger.warning(f"Could not get audio duration: {e}")
+            return self._estimate_audio_duration(audio_path)
+    
+    def _create_empty_result(self, audio_path: str, options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Create empty transcription result"""
+        return {
+            "full_text": "",
+            "segments": [],
+            "language": options.get("language", "unknown") if options else "unknown",
+            "confidence": 0.0
+        }
     
     def _create_transcription_prompt(self, options: Optional[Dict[str, Any]]) -> str:
         """Create optimized prompt for speech-to-text transcription"""

@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import os
 import json
+import time
 
 from app.core.config import settings
 from app.core.database import get_collection
@@ -21,6 +22,152 @@ class MediaProcessor:
         self.stt_service = get_speech_to_text_service()
         self.translation_service = get_translation_service()
         self.audio_processor = AudioProcessor()
+    
+    async def process_transcription_job(self, job_id: str, media_file_id: str, user_id: str):
+        """Process a transcription job (background task)"""
+        logger.info(f"Starting transcription job: {job_id}", extra={
+            "job_id": job_id,
+            "media_file_id": media_file_id,
+            "user_id": user_id
+        })
+        
+        try:
+            # Update job status to processing
+            jobs_collection = await get_collection("processing_jobs")
+            await jobs_collection.update_one(
+                {"jobId": job_id},
+                {
+                    "$set": {
+                        "processing.status": "processing",
+                        "processing.progress": 10,
+                        "processing.startedAt": datetime.utcnow(),
+                        "updatedAt": datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Update Redis progress
+            await set_progress(job_id, {
+                "jobId": job_id,
+                "status": "processing",
+                "progress": 10,
+                "stage": "starting_transcription"
+            })
+            
+            # Get media file info
+            media_collection = await get_collection("media_files")
+            media_file = await media_collection.find_one({"_id": media_file_id})
+            
+            if not media_file:
+                raise Exception(f"Media file {media_file_id} not found")
+            
+            # Get job details
+            job = await jobs_collection.find_one({"jobId": job_id})
+            if not job:
+                raise Exception(f"Job {job_id} not found")
+            
+            # Get file path
+            file_path = Path(settings.UPLOAD_DIR) / media_file["filename"]
+            if not file_path.exists():
+                raise Exception(f"File not found: {file_path}")
+            
+            # Update progress
+            await set_progress(job_id, {
+                "jobId": job_id,
+                "status": "processing",
+                "progress": 25,
+                "stage": "transcribing"
+            })
+            
+            # Prepare transcription options
+            transcription_options = {
+                "language": job["job"]["settings"]["language"],
+                "enable_timestamps": job["job"]["settings"]["speakerDiarization"],
+                "enable_speaker_diarization": job["job"]["settings"]["speakerDiarization"]
+            }
+            
+            # Perform transcription
+            logger.info(f"Starting transcription for {file_path}")
+            transcription_result = await self.stt_service.transcribe(
+                str(file_path),
+                transcription_options
+            )
+            
+            # Update progress
+            await set_progress(job_id, {
+                "jobId": job_id,
+                "status": "processing",
+                "progress": 80,
+                "stage": "saving_results"
+            })
+            
+            # Save transcription results
+            results_collection = await get_collection("transcription_results")
+            await results_collection.insert_one({
+                "jobId": job_id,
+                "userId": user_id,
+                "mediaFileId": media_file_id,
+                "full_text": transcription_result.get("full_text", ""),
+                "language": transcription_result.get("language", "unknown"),
+                "confidence": transcription_result.get("confidence", 0.0),
+                "segments": transcription_result.get("segments", []),
+                "metadata": transcription_result.get("metadata", {}),
+                "createdAt": datetime.utcnow(),
+                "processing_model": job["job"]["model"]
+            })
+            
+            # Mark job as completed
+            await jobs_collection.update_one(
+                {"jobId": job_id},
+                {
+                    "$set": {
+                        "processing.status": "completed",
+                        "processing.progress": 100,
+                        "processing.completedAt": datetime.utcnow(),
+                        "updatedAt": datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Final progress update
+            await set_progress(job_id, {
+                "jobId": job_id,
+                "status": "completed",
+                "progress": 100,
+                "stage": "completed"
+            })
+            
+            logger.info(f"Transcription job {job_id} completed successfully")
+            
+        except Exception as e:
+            logger.error(f"Transcription job {job_id} failed: {e}", exc_info=True)
+            
+            # Mark job as failed
+            try:
+                jobs_collection = await get_collection("processing_jobs")
+                await jobs_collection.update_one(
+                    {"jobId": job_id},
+                    {
+                        "$set": {
+                            "processing.status": "failed",
+                            "processing.error": str(e),
+                            "processing.progress": 0,
+                            "updatedAt": datetime.utcnow()
+                        }
+                    }
+                )
+                
+                # Update Redis progress with error
+                await set_progress(job_id, {
+                    "jobId": job_id,
+                    "status": "failed",
+                    "progress": 0,
+                    "stage": "failed",
+                    "error": str(e)
+                })
+                
+            except Exception as update_error:
+                logger.error(f"Failed to update job {job_id} as failed: {update_error}")
     
     async def process_translation(self, task_id: str, user_id: str):
         """Process translation for a media file"""

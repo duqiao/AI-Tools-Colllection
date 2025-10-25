@@ -45,21 +45,32 @@ async def init_db():
 async def create_indexes():
     """Create database indexes for better performance"""
     try:
+        # Clean up any documents with null values that would violate unique indexes
+        await Database.database.media_files.delete_many({"fileName": None})
+        await Database.database.processing_jobs.delete_many({"jobId": None})
+        await Database.database.users.delete_many({"openid": None})
+        
+        # Drop existing indexes to avoid conflicts
+        await Database.database.media_files.drop_indexes()
+        await Database.database.processing_jobs.drop_indexes()
+        await Database.database.users.drop_indexes()
+        await Database.database.transcription_results.drop_indexes()
+        
         # Media files indexes
         await Database.database.media_files.create_index([("uploaded_by", ASCENDING), ("upload_date", DESCENDING)])
-        await Database.database.media_files.create_index([("file_name", 1)], unique=True)
+        await Database.database.media_files.create_index([("fileName", 1)], unique=True)  # camelCase to match upload.py
         
         # Processing jobs indexes
-        await Database.database.processing_jobs.create_index([("job_id", 1)], unique=True)
-        await Database.database.processing_jobs.create_index([("user", ASCENDING), ("status", ASCENDING)])
-        await Database.database.processing_jobs.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+        await Database.database.processing_jobs.create_index([("jobId", 1)], unique=True)  # camelCase to match upload.py
+        await Database.database.processing_jobs.create_index([("userId", ASCENDING), ("processing.status", ASCENDING)])  # camelCase userId
+        await Database.database.processing_jobs.create_index([("processing.status", ASCENDING), ("createdAt", DESCENDING)])
         
         # Users indexes
         await Database.database.users.create_index([("openid", 1)], unique=True)
         await Database.database.users.create_index([("is_active", ASCENDING)])
         
         # Transcription results indexes
-        await Database.database.transcription_results.create_index([("job_id", 1)])
+        await Database.database.transcription_results.create_index([("jobId", 1)])  # camelCase to match upload.py
         
         logger.info("Database indexes created successfully")
         

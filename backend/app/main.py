@@ -88,6 +88,13 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Include routers
 app.include_router(
     health.router,
+    prefix="/api/v1/health",
+    tags=["Health"]
+)
+
+# Also include health endpoints at root level for compatibility
+app.include_router(
+    health.router,
     prefix="/health",
     tags=["Health"]
 )

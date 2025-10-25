@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, get_collection
 from app.core.redis import get_redis
 from app.models.schemas import JobStatus
 
@@ -80,17 +80,18 @@ async def detailed_health_check():
             media_collection = await get_collection("media_files")
             
             total_jobs = await jobs_collection.count_documents({})
-            pending_jobs = await jobs_collection.count_documents({"status": JobStatus.PENDING})
-            processing_jobs = await jobs_collection.count_documents({"status": JobStatus.PROCESSING})
-            completed_jobs = await jobs_collection.count_documents({"status": JobStatus.COMPLETED})
-            failed_jobs = await jobs_collection.count_documents({"status": JobStatus.FAILED})
+            pending_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.PENDING})
+            processing_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.PROCESSING})
+            completed_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.COMPLETED})
+            failed_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.FAILED})
             
             total_users = await users_collection.count_documents({})
             active_users = await users_collection.count_documents({"is_active": True})
             
             total_media = await media_collection.count_documents({})
-            audio_files = await media_collection.count_documents({"file_type": "audio"})
-            video_files = await media_collection.count_documents({"file_type": "video"})
+            # Note: Media files don't have explicit file_type field, infer from MIME type
+            audio_files = await media_collection.count_documents({"mimeType": {"$regex": "^audio/"}})
+            video_files = await media_collection.count_documents({"mimeType": {"$regex": "^video/"}})
             
             health_status["statistics"] = {
                 "jobs": {

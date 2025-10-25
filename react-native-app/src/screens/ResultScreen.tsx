@@ -53,31 +53,124 @@ export const ResultScreen: React.FC<{ route?: { params: { taskId: string; jobIds
           const jobId = jobIds[i];
           
           try {
-            const response = await apiClient.get(`/upload/${jobId}`);
+            interface UploadStatusResponse {
+              job_id: string;
+              status: 'pending' | 'processing' | 'completed' | 'failed';
+              progress: number;
+              file_info: {
+                original_name: string;
+                file_size: number;
+                mime_type: string;
+                duration?: number;
+              };
+              settings: {
+                language: string;
+                speaker_diarization: boolean;
+              };
+              results?: {
+                text: string;
+                language: string;
+                confidence: number;
+                duration: number;
+                words: Array<{
+                  word: string;
+                  start: number;
+                  end: number;
+                  confidence: number;
+                }>;
+                segments: Array<{
+                  id: number;
+                  start: number;
+                  end: number;
+                  text: string;
+                  speaker?: string;
+                  confidence: number;
+                }>;
+              };
+              processing_info: {
+                started_at?: string;
+                completed_at?: string;
+                processing_time?: number;
+                cost: number;
+              };
+              error?: string;
+              created_at: string;
+              updated_at: string;
+            }
+
+            console.log(`Fetching status for job ${jobId}...`);
+            const response = await apiClient.request<UploadStatusResponse>({
+              method: 'GET',
+              url: `/upload/${jobId}`,
+              params: {
+                t: Date.now() // Add cache-busting parameter
+              }
+            });
+            
+            console.log('API Response:', {
+              success: response.success,
+              error: response.error,
+              data: response.data,
+              jobId
+            });
+            
+            if (!response.success) {
+              console.error(`API Error for job ${jobId}:`, {
+                error: response.error,
+                endpoint: `/upload/${jobId}`
+              });
+              throw new Error(response.error || 'API request failed');
+            }
+            
+            if (!response.data) {
+              console.error(`No data returned for job ${jobId}`, {
+                response: {
+                  success: response.success,
+                  error: response.error
+                },
+                jobId,
+                endpoint: `/upload/${jobId}`
+              });
+              throw new Error('No data returned from API');
+            }
+
             const data = response.data;
+            console.log(`Status for job ${jobId}:`, data.status);
 
             updatedResults[i] = {
               ...updatedResults[i],
-              transcribedText: data.transcribed_text,
-              confidence: data.confidence,
-              duration: data.duration,
-              wordCount: data.word_count,
-              status: data.status === 'completed' ? 'completed' : 
-                     data.status === 'failed' ? 'error' : 
+              transcribedText: data.results?.text,
+              confidence: data.results?.confidence,
+              duration: data.file_info?.duration,
+              wordCount: (data.results?.words || []).length,
+              status: data.status === 'completed' ? 'completed' :
+                     data.status === 'failed' ? 'error' :
                      data.status === 'processing' ? 'processing' : 'pending',
-              error: data.error_message,
-              completedAt: data.completed_at,
+              error: data.error,
+              completedAt: data.processing_info?.completed_at,
             };
 
             if (data.status !== 'completed' && data.status !== 'failed') {
               allCompleted = false;
             }
-          } catch (error) {
-            console.error(`Failed to fetch result for job ${jobId}:`, error);
+          } catch (error: any) {
+            const errorMessage = error?.message || 'Unknown error';
+            console.error(`Failed to fetch result for job ${jobId}:`, {
+              error: {
+                name: error?.name,
+                message: error?.message,
+                stack: error?.stack,
+                code: error?.code,
+                response: error?.response?.data,
+                status: error?.response?.status,
+              },
+              jobId,
+              endpoint: `/upload/${jobId}`
+            });
             updatedResults[i] = {
               ...updatedResults[i],
               status: 'error',
-              error: 'Failed to fetch result',
+              error: `Failed to fetch result: ${errorMessage}`,
             };
           }
         }

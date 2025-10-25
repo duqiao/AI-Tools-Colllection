@@ -1,11 +1,41 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiResponse, User, TranslationTask, SubscriptionPlan, PaymentOrder, QuotaStatus, WeChatUserInfo, UploadResponse, TranslationRequest } from '@/types';
+import { AuthService } from './auth';
 
 // API Configuration
 const API_BASE_URL = __DEV__ ? 'http://127.0.0.1:8001/api/v1' : 'https://your-api-domain.com/api/v1';
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
+
+// Create a guest user and get token
+const createGuestUser = async () => {
+  try {
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substr(2, 9);
+    
+    // Create guest user data
+    const guestUser = {
+      username: `Guest_${timestamp}`,
+      openid: `guest_${timestamp}_${randomId}`
+    };
+    
+    // Make the guest auth request
+    const response = await axios.post(`${API_BASE_URL}/auth/guest`, guestUser);
+    
+    if (response.status === 200 && response.data) {
+      const token = response.data.token || response.data.access_token;
+      if (token) {
+        await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
+        return token;
+      }
+    }
+    throw new Error('Failed to get token from guest auth response');
+  } catch (error: any) {
+    console.error('Guest user creation failed:', error);
+    throw error;
+  }
+};
 
 class ApiClient {
   private client: AxiosInstance;
@@ -28,9 +58,23 @@ class ApiClient {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
       async (config) => {
+        // If we don't have a token, try to create a guest user
+        if (!this.token) {
+          try {
+            const guestToken = await createGuestUser();
+            if (guestToken) {
+              this.token = guestToken;
+            }
+          } catch (error) {
+            console.error('Failed to create guest user:', error);
+          }
+        }
+
+        // Add token to request if available
         if (this.token) {
           config.headers.Authorization = `Bearer ${this.token}`;
         }
+        
         return config;
       },
       (error) => Promise.reject(error)
@@ -41,7 +85,7 @@ class ApiClient {
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid - try to refresh
+          // First try to refresh if we have a refresh token
           const refreshToken = await this.getRefreshToken();
           if (refreshToken) {
             try {
@@ -66,13 +110,28 @@ class ApiClient {
                 return this.client(originalRequest);
               }
             } catch (refreshError) {
-              // Refresh failed, clear tokens and redirect to login
-              await this.clearToken();
               console.error('Token refresh failed:', refreshError);
+              // Continue to guest user creation
             }
-          } else {
-            // No refresh token, clear auth data
-            await this.clearToken();
+          }
+          
+          // If refresh failed or no refresh token, try guest auth
+          try {
+            console.log('Attempting guest user authentication...');
+            const guestToken = await createGuestUser();
+            if (guestToken) {
+              // Save the guest token
+              this.token = guestToken;
+              
+              // Retry the original request with guest token
+              const originalRequest = error.config;
+              if (originalRequest?.headers) {
+                originalRequest.headers.Authorization = `Bearer ${guestToken}`;
+              }
+              return this.client(originalRequest);
+            }
+          } catch (guestError) {
+            console.error('Guest authentication failed:', guestError);
           }
         }
         return Promise.reject(error);
@@ -123,7 +182,7 @@ class ApiClient {
   }
 
   // Generic request methods
-  private async request<T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async request<T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
     try {
       const response: AxiosResponse<ApiResponse<T>> = await this.client.request(config);
       return response.data;
