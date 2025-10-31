@@ -69,7 +69,15 @@
       "Bash(\"./venv/Scripts/python.exe\":*)",
       "Bash(ffmpeg:*)",
       "Bash(where:*)",
-      "Bash(start:*)"
+      "Bash(start:*)",
+      "Bash(\"venv\\Scripts\\python.exe\" consolidate_to_selected_user.py)",
+      "Bash(node:*)",
+      "Bash(\"venv\\Scripts\\python.exe\":*)",
+      "WebFetch(domain:fastapi.tiangolo.com)",
+      "Bash(chmod:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker run:*)",
+      "Bash(.start_backend.ps1)"
     ],
     "deny": []
   }

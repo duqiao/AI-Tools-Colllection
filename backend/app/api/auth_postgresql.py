@@ -30,9 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
 @router.options("/guest")
 async def auth_guest_options():
     """Handle CORS preflight requests for guest auth endpoint"""
@@ -429,7 +426,7 @@ async def guest_login(user_data: UserCreate):
         
         access_token_payload = {
             "user_id": uuid.UUID(guest_user_id),
-            "sub": guest_user_record["email"],  # Use email as sub for consistency
+            "sub": guest_user_record["email"],
             "subscription_level": SubscriptionLevel.FREE,
             "exp": int(access_token_expires.timestamp()),
             "iat": int(datetime.utcnow().timestamp())
@@ -502,10 +499,6 @@ async def refresh_token(request: RefreshTokenRequest):
                 status_code=401,
                 detail="Invalid refresh token"
             )
-        
-        # Convert to string if it's a UUID
-        if isinstance(user_id, uuid.UUID):
-            user_id = str(user_id)
         
         # Get user
         user = await get_user_by_id(user_id)

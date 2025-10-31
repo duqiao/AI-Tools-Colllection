@@ -3,13 +3,22 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+
+# PostgreSQL Database
 sqlalchemy==2.0.23
 alembic==1.12.1
-pymongo==4.6.0
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Redis
 redis==5.0.1
+
+# Pydantic and Configuration
 pydantic==2.5.0
 pydantic-settings==2.1.0
 email-validator==2.1.0
+
+# File Handling
 aiofiles==23.2.1
 python-dotenv==1.0.0
 
@@ -40,3 +49,7 @@ pytest-asyncio==0.21.1
 black==23.11.0
 mypy==1.7.1
 pre-commit==3.6.0
+
+# PostgreSQL Migration Tools
+# asyncpg==0.29.0  # Already included above
+# psycopg2-binary==2.9.9  # Already included above

@@ -3,36 +3,38 @@ from typing import Dict, Any
 import logging
 from datetime import datetime
 
-from app.core.database import get_collection
-from app.models.schemas import User, UserProfile, UserProfileUpdate
-from app.api.dependencies import get_current_user
+from app.repositories.user_repository import UserRepository
+from app.repositories.media_repository import MediaRepository
+from app.repositories.job_repository import ProcessingJobRepository
+from app.models.schemas import User, UserProfile, UserProfileUpdate, UserResponse, SubscriptionLevel
+from app.api.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.get("/profile", response_model=UserProfile)
+@router.get("/profile", response_model=UserResponse)
 async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get user profile"""
+    """Get user profile using PostgreSQL"""
     try:
-        collection = await get_collection("users")
-        user = await collection.find_one({"_id": current_user["id"]})
+        async with UserRepository() as user_repo:
+            user = await user_repo.get_by_id(current_user["id"])
+            
+            if not user:
+                raise HTTPException(
+                    status_code=404,
+                    detail="User not found"
+                )
         
-        if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
-        
-        return UserProfile(
-            id=str(user["_id"]),
-            email=user.get("email"),
-            openid=user.get("openid"),
+        return UserResponse(
+            id=str(user["id"]),
             username=user["username"],
+            email=user["email"],
+            subscription_level=user["subscription_level"],
             profile=user.get("profile", {}),
-            subscription=user.get("subscription", {}),
-            preferences=user.get("preferences", {}),
-            createdAt=user.get("createdAt"),
-            lastLoginAt=user.get("lastLoginAt")
+            usage_stats=user.get("usage_stats", {}),
+            created_at=user.get("created_at"),
+            updated_at=user.get("updated_at"),
+            last_login=user.get("last_login")
         )
         
     except HTTPException:
@@ -44,70 +46,58 @@ async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_us
             detail="Failed to get user profile"
         )
 
-@router.put("/profile", response_model=UserProfile)
+@router.put("/profile", response_model=UserResponse)
 async def update_user_profile(
     profile_data: UserProfileUpdate,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Update user profile"""
+    """Update user profile using PostgreSQL"""
     try:
-        updates = {}
+        async with UserRepository() as user_repo:
+            # Build profile updates using PostgreSQL schema
+            profile_updates = {}
+            
+            if profile_data.first_name is not None:
+                profile_updates["first_name"] = profile_data.first_name
+            if profile_data.last_name is not None:
+                profile_updates["last_name"] = profile_data.last_name
+            if profile_data.avatar_url is not None:
+                profile_updates["avatar_url"] = profile_data.avatar_url
+            if profile_data.preferences is not None:
+                profile_updates["preferences"] = profile_data.preferences
+            
+            if not profile_updates:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No valid fields to update"
+                )
+            
+            # Update user profile
+            success = await user_repo.update_profile(current_user["id"], profile_updates)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail="User not found"
+                )
+            
+            # Get updated user data
+            updated_user = await user_repo.get_by_id(current_user["id"])
+            
+            logger.info(f"User profile updated: {current_user['id']}", extra={
+                "updates": list(profile_updates.keys())
+            })
         
-        # Build profile updates
-        if profile_data.firstName is not None:
-            updates["profile.firstName"] = profile_data.firstName
-        if profile_data.lastName is not None:
-            updates["profile.lastName"] = profile_data.lastName
-        if profile_data.organization is not None:
-            updates["profile.organization"] = profile_data.organization
-        
-        # Build preference updates
-        if profile_data.defaultLanguage is not None:
-            updates["preferences.defaultLanguage"] = profile_data.defaultLanguage
-        if profile_data.autoDeleteDays is not None:
-            updates["preferences.autoDeleteDays"] = profile_data.autoDeleteDays
-        if profile_data.notificationSettings is not None:
-            updates["preferences.notificationSettings"] = profile_data.notificationSettings
-        
-        if not updates:
-            raise HTTPException(
-                status_code=400,
-                detail="No valid fields to update"
-            )
-        
-        # Add updated timestamp
-        updates["updatedAt"] = datetime.utcnow()
-        
-        # Update user in database
-        collection = await get_collection("users")
-        result = await collection.update_one(
-            {"_id": current_user["id"]},
-            {"$set": updates}
-        )
-        
-        if result.matched_count == 0:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
-        
-        # Get updated user data
-        updated_user = await collection.find_one({"_id": current_user["id"]})
-        
-        logger.info(f"User profile updated: {current_user.get('openid', current_user['id'])}", extra={
-            "updates": list(updates.keys())
-        })
-        
-        return UserProfile(
-            id=str(updated_user["_id"]),
-            email=updated_user.get("email"),
-            openid=updated_user.get("openid"),
+        return UserResponse(
+            id=str(updated_user["id"]),
             username=updated_user["username"],
+            email=updated_user["email"],
+            subscription_level=updated_user["subscription_level"],
             profile=updated_user.get("profile", {}),
-            subscription=updated_user.get("subscription", {}),
-            preferences=updated_user.get("preferences", {}),
-            createdAt=updated_user.get("createdAt"),
-            lastLoginAt=updated_user.get("lastLoginAt")
+            usage_stats=updated_user.get("usage_stats", {}),
+            created_at=updated_user.get("created_at"),
+            updated_at=updated_user.get("updated_at"),
+            last_login=updated_user.get("last_login")
         )
         
     except HTTPException:
@@ -121,106 +111,104 @@ async def update_user_profile(
 
 @router.get("/stats")
 async def get_user_statistics(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get user statistics"""
+    """Get user statistics using PostgreSQL"""
     try:
-        from app.models.schemas import JobStatus
+        # Get file statistics using PostgreSQL
+        async with MediaRepository() as media_repo:
+            total_files = await media_repo.count_by_user(current_user["id"])
+            storage_stats = await media_repo.get_storage_stats(current_user["id"])
+            
+            # Get files by type
+            audio_files = await media_repo.count_by_type("audio")
+            video_files = await media_repo.count_by_type("video")
+            
+            # Filter by user for file type counts
+            audio_user_files = len(await media_repo.get_by_user_and_status(
+                current_user["id"], "uploaded"
+            ))
+            # For now, we'll approximate - this would need refinement in real implementation
+            user_audio_files = await media_repo.get_by_file_type("audio", limit=1000)
+            user_video_files = await media_repo.get_by_file_type("video", limit=1000)
+            
+            user_audio_count = sum(1 for f in user_audio_files if str(f["user_id"]) == str(current_user["id"]))
+            user_video_count = sum(1 for f in user_video_files if str(f["user_id"]) == str(current_user["id"]))
         
-        # Get file statistics
-        media_collection = await get_collection("media_files")
-        total_files = await media_collection.count_documents({"uploaded_by": current_user["id"]})
+        # Get job statistics using PostgreSQL
+        async with ProcessingJobRepository() as job_repo:
+            total_jobs = await job_repo.count_by_user(current_user["id"])
+            completed_jobs = await job_repo.get_by_status("completed")
+            failed_jobs = await job_repo.get_by_status("failed")
+            processing_jobs = await job_repo.get_by_status("processing")
+            
+            # Filter jobs by user
+            user_completed = sum(1 for job in completed_jobs if str(job["user_id"]) == str(current_user["id"]))
+            user_failed = sum(1 for job in failed_jobs if str(job["user_id"]) == str(current_user["id"]))
+            user_processing = sum(1 for job in processing_jobs if str(job["user_id"]) == str(current_user["id"]))
+            
+            # Get job statistics
+            job_stats = await job_repo.get_user_job_statistics(current_user["id"])
         
-        # Calculate total storage and duration
-        pipeline = [
-            {"$match": {"uploaded_by": current_user["id"]}},
-            {"$group": {
-                "_id": None,
-                "total_size": {"$sum": "$file_size"},
-                "total_duration": {"$sum": "$duration"},
-                "audio_files": {"$sum": {"$cond": [{"$eq": ["$file_type", "audio"]}, 1, 0]}},
-                "video_files": {"$sum": {"$cond": [{"$eq": ["$file_type", "video"]}, 1, 0]}}
-            }}
-        ]
+        # Get user statistics from user repository
+        async with UserRepository() as user_repo:
+            user_stats = await user_repo.get_user_stats(current_user["id"])
         
-        file_stats = await media_collection.aggregate(pipeline).to_list(None)
-        file_stats = file_stats[0] if file_stats else {"total_size": 0, "total_duration": 0, "audio_files": 0, "video_files": 0}
+        # Get usage stats from current user data
+        usage_stats = current_user.get("usage_stats", {})
+        subscription_level = current_user.get("subscription_level", SubscriptionLevel.FREE)
         
-        # Get transcription statistics
-        jobs_collection = await get_collection("processing_jobs")
+        # Define limits by subscription level
+        daily_limits = {
+            SubscriptionLevel.FREE: {
+                "total_files_processed": 10,
+                "total_audio_duration": 300,  # 5 minutes
+                "storage_used_bytes": 50 * 1024 * 1024  # 50MB
+            },
+            SubscriptionLevel.PREMIUM: {
+                "total_files_processed": 100,
+                "total_audio_duration": 3600,  # 1 hour
+                "storage_used_bytes": 200 * 1024 * 1024  # 200MB
+            },
+            SubscriptionLevel.ENTERPRISE: {
+                "total_files_processed": 1000,
+                "total_audio_duration": 10800,  # 3 hours
+                "storage_used_bytes": 500 * 1024 * 1024  # 500MB
+            }
+        }
         
-        total_transcriptions = await jobs_collection.count_documents({"user": current_user["id"]})
-        completed_translations = await jobs_collection.count_documents({
-            "user": current_user["id"],
-            "status": JobStatus.COMPLETED
-        })
-        failed_translations = await jobs_collection.count_documents({
-            "user": current_user["id"],
-            "status": JobStatus.FAILED
-        })
-        processing_translations = await jobs_collection.count_documents({
-            "user": current_user["id"],
-            "status": JobStatus.PROCESSING
-        })
-        
-        # Calculate average processing time
-        pipeline = [
-            {"$match": {"user": current_user["id"], "status": JobStatus.COMPLETED}},
-            {"$group": {
-                "_id": None,
-                "avg_processing_time": {"$avg": "$processing_time"}
-            }}
-        ]
-        
-        avg_time_result = await jobs_collection.aggregate(pipeline).to_list(None)
-        average_processing_time = avg_time_result[0]["avg_processing_time"] if avg_time_result else 0
-        
-        # Get current month usage
-        from datetime import datetime, timedelta
-        current_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        current_month_pipeline = [
-            {"$match": {
-                "user": current_user["id"],
-                "created_at": {"$gte": current_month_start}
-            }},
-            {"$group": {
-                "_id": None,
-                "minutes_used": {"$sum": "$duration"},
-                "files_uploaded": {"$sum": 1}
-            }}
-        ]
-        
-        current_month_stats = await media_collection.aggregate(current_month_pipeline).to_list(None)
-        current_month_stats = current_month_stats[0] if current_month_stats else {"minutes_used": 0, "files_uploaded": 0}
+        limits = daily_limits.get(subscription_level, daily_limits[SubscriptionLevel.FREE])
         
         # Calculate remaining limits
-        subscription = current_user.get("subscription", {})
-        limits = subscription.get("limits", {})
-        usage = subscription.get("usage", {})
-        
-        storage_remaining = max(0, limits.get("maxStorage", 1024*1024*1024) - usage.get("currentStorage", 0))
-        minutes_remaining = max(0, limits.get("monthlyMinutes", 120) - usage.get("monthlyMinutesUsed", 0))
+        files_remaining = max(0, limits["total_files_processed"] - usage_stats.get("total_files_processed", 0))
+        audio_seconds_remaining = max(0, limits["total_audio_duration"] - usage_stats.get("total_audio_duration", 0))
+        storage_bytes_remaining = max(0, limits["storage_used_bytes"] - usage_stats.get("storage_used_bytes", 0))
         
         return {
             "files": {
                 "total": total_files,
-                "size": file_stats["total_size"],
-                "duration": file_stats["total_duration"] or 0
+                "size": storage_stats.get("total_size", 0),
+                "duration": storage_stats.get("total_duration", 0),
+                "audio_files": user_audio_count,
+                "video_files": user_video_count
             },
             "transcriptions": {
-                "total": total_transcriptions,
-                "completed": completed_translations,
-                "failed": failed_translations,
-                "processing": processing_translations,
-                "average_processing_time": average_processing_time / 1000 if average_processing_time else 0  # Convert to seconds
+                "total": total_jobs,
+                "completed": user_completed,
+                "failed": user_failed,
+                "processing": user_processing,
+                "average_processing_time": job_stats.get("avg_processing_time_seconds", 0)
             },
-            "current_month": {
-                "minutes_used": int(current_month_stats["minutes_used"] or 0),
-                "files_uploaded": current_month_stats["files_uploaded"]
+            "usage": {
+                "total_files_processed": usage_stats.get("total_files_processed", 0),
+                "total_audio_duration": usage_stats.get("total_audio_duration", 0),
+                "api_calls_count": usage_stats.get("api_calls_count", 0),
+                "storage_used_bytes": usage_stats.get("storage_used_bytes", 0)
             },
             "limits": {
-                "storage_remaining": storage_remaining,
-                "minutes_remaining": minutes_remaining
-            }
+                "files_remaining": files_remaining,
+                "audio_seconds_remaining": audio_seconds_remaining,
+                "storage_bytes_remaining": storage_bytes_remaining
+            },
+            "subscription_level": subscription_level
         }
         
     except Exception as e:

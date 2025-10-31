@@ -5,9 +5,12 @@ import asyncio
 from datetime import datetime
 
 from app.core.config import settings
-from app.core.database import get_db, get_collection
+from app.core.postgres_db import get_db
 from app.core.redis import get_redis
 from app.models.schemas import JobStatus
+from app.repositories.user_repository import UserRepository
+from app.repositories.media_repository import MediaRepository
+from app.repositories.job_repository import ProcessingJobRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,13 +45,16 @@ async def detailed_health_check():
             }
         }
         
-        # Check database connection
+        # Check PostgreSQL database connection
         try:
             database = await get_db()
-            await database.command("ping")
+            # Simple connection test with PostgreSQL
+            async with database.get_connection() as conn:
+                await conn.execute("SELECT 1")
             health_status["services"]["database"] = "healthy"
+            health_status["database_type"] = "PostgreSQL"
         except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+            logger.error(f"PostgreSQL health check failed: {e}")
             health_status["services"]["database"] = "unhealthy"
             health_status["status"] = "degraded"
         
@@ -73,25 +79,24 @@ async def detailed_health_check():
             health_status["services"]["file_system"] = "unhealthy"
             health_status["status"] = "degraded"
         
-        # Get system statistics
+        # Get system statistics using PostgreSQL repositories
         try:
-            jobs_collection = await get_collection("processing_jobs")
-            users_collection = await get_collection("users")
-            media_collection = await get_collection("media_files")
+            async with ProcessingJobRepository() as job_repo:
+                total_jobs = await job_repo.count_total()
+                pending_jobs = await job_repo.count_by_status("pending")
+                processing_jobs = await job_repo.count_by_status("processing")
+                completed_jobs = await job_repo.count_by_status("completed")
+                failed_jobs = await job_repo.count_by_status("failed")
             
-            total_jobs = await jobs_collection.count_documents({})
-            pending_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.PENDING})
-            processing_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.PROCESSING})
-            completed_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.COMPLETED})
-            failed_jobs = await jobs_collection.count_documents({"processing.status": JobStatus.FAILED})
+            async with UserRepository() as user_repo:
+                total_users = await user_repo.count_total()
+                active_users = await user_repo.count_active_users()
             
-            total_users = await users_collection.count_documents({})
-            active_users = await users_collection.count_documents({"is_active": True})
-            
-            total_media = await media_collection.count_documents({})
-            # Note: Media files don't have explicit file_type field, infer from MIME type
-            audio_files = await media_collection.count_documents({"mimeType": {"$regex": "^audio/"}})
-            video_files = await media_collection.count_documents({"mimeType": {"$regex": "^video/"}})
+            async with MediaRepository() as media_repo:
+                total_media = await media_repo.count_total()
+                # Count by MIME type pattern
+                audio_files = await media_repo.count_by_mime_type("audio%")
+                video_files = await media_repo.count_by_mime_type("video%")
             
             health_status["statistics"] = {
                 "jobs": {
@@ -118,11 +123,14 @@ async def detailed_health_check():
         
         # Configuration information
         health_status["configuration"] = {
-            "stt_provider": settings.STT_PROVIDER,
-            "translation_provider": settings.TRANSLATION_PROVIDER,
-            "max_file_size": settings.MAX_FILE_SIZE,
+            "database_type": "PostgreSQL",
+            "stt_provider": getattr(settings, 'STT_PROVIDER', 'openai'),
+            "translation_provider": getattr(settings, 'TRANSLATION_PROVIDER', 'openai'),
+            "max_file_size": getattr(settings, 'MAX_FILE_SIZE', 100 * 1024 * 1024),
             "upload_dir": settings.UPLOAD_DIR,
-            "max_concurrent_jobs": settings.MAX_CONCURRENT_JOBS
+            "postgres_host": settings.POSTGRES_HOST,
+            "postgres_port": settings.POSTGRES_PORT,
+            "postgres_db": settings.POSTGRES_DB
         }
         
         return {
@@ -148,7 +156,9 @@ async def readiness_check():
     try:
         # Check if all critical services are ready
         database = await get_db()
-        await database.command("ping")
+        # Test PostgreSQL connection
+        async with database.get_connection() as conn:
+            await conn.execute("SELECT 1")
         
         redis_client = await get_redis()
         await redis_client.ping()
@@ -159,7 +169,8 @@ async def readiness_check():
         
         return {
             "success": True,
-            "message": "Service is ready"
+            "message": "Service is ready",
+            "database": "PostgreSQL"
         }
         
     except Exception as e:

@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiResponse, User, TranslationTask, SubscriptionPlan, PaymentOrder, QuotaStatus, WeChatUserInfo, UploadResponse, TranslationRequest } from '@/types';
 import { AuthService } from './auth';
+import { SelectedUserService } from './SelectedUserService';
 
 // API Configuration
 const API_BASE_URL = __DEV__ ? 'http://127.0.0.1:8001/api/v1' : 'https://your-api-domain.com/api/v1';
@@ -11,13 +12,25 @@ const REFRESH_TOKEN_KEY = 'refresh_token';
 // Create a guest user and get token
 const createGuestUser = async () => {
   try {
+    // First, check if selected user is already configured
+    const isSelectedUserConfigured = await SelectedUserService.isSelectedUserConfigured();
+    if (isSelectedUserConfigured) {
+      console.log('🔓 Using selected user instead of creating new guest');
+      const selectedUser = await SelectedUserService.getSelectedUser();
+      if (selectedUser) {
+        return selectedUser.token;
+      }
+    }
+
+    // If no selected user, create a new guest user
+    console.log('🔓 Creating new guest user...');
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substr(2, 9);
     
     // Create guest user data
     const guestUser = {
-      username: `Guest_${timestamp}`,
-      openid: `guest_${timestamp}_${randomId}`
+      username: 'MySelectedUser',
+      openid: 'MySelectedUser'
     };
     
     // Make the guest auth request

@@ -28,8 +28,20 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Optional[str] = None
     
     # Database
-    MONGODB_URI: str = "mongodb://admin:dev123456@localhost:27018/ai_media_translation?authSource=admin"
+    DATABASE_URL: str = "postgresql://admin:dev123456@localhost:5432/ai_media_translation"
     REDIS_URL: str = "redis://:dev123456@localhost:6379"
+    
+    # PostgreSQL Connection Settings (for compatibility with existing configs)
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "ai_media_translation"
+    POSTGRES_USER: str = "admin"
+    POSTGRES_PASSWORD: str = "dev123456"
+    
+    # PostgreSQL Connection Pool Settings
+    DATABASE_POOL_SIZE: int = 10
+    DATABASE_MIN_CONNECTIONS: int = 2
+    DATABASE_COMMAND_TIMEOUT: int = 60
     
     # JWT
     JWT_SECRET: str = "your-super-secret-jwt-key-change-this-in-production"
@@ -96,6 +108,7 @@ class Settings(BaseSettings):
         env_file = ".env.local"  # Prioritize local development config
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Allow extra environment variables (for migration compatibility)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -16,11 +16,11 @@ if __name__ == "__main__":
     from app.main import app
     from app.core.config import settings
     
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.VERSION}")
-    print(f"📍 Environment: {settings.DEBUG and 'Development' or 'Production'}")
-    print(f"🌐 Server will be available at: http://{settings.HOST}:{settings.PORT}")
-    print(f"📚 API Documentation: http://{settings.HOST}:{settings.PORT}/docs")
-    print(f"🗄️  Health Check: http://{settings.HOST}:{settings.PORT}/health")
+    print(f"Starting {settings.APP_NAME} v{settings.VERSION}")
+    print(f"Environment: {settings.DEBUG and 'Development' or 'Production'}")
+    print(f"Server will be available at: http://{settings.HOST}:{settings.PORT}")
+    print(f"API Documentation: http://{settings.HOST}:{settings.PORT}/docs")
+    print(f"Health Check: http://{settings.HOST}:{settings.PORT}/health")
     
     uvicorn.run(
         "app.main:app",

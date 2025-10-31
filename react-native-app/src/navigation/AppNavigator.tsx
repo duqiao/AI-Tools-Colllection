@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from '@expo/vector-icons/MaterialIcons';
@@ -9,6 +9,7 @@ import { ResultScreen } from '@/screens/ResultScreen';
 import { HistoryScreen } from '@/screens/HistoryScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { DebugGuestLogin } from '@/screens/DebugGuestLogin';
+import { setupMySelectedUser } from '@/services/setupSelectedUser';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -75,6 +76,19 @@ const TabNavigator = () => {
 };
 
 export const AppNavigator = () => {
+  // Setup selected user when navigator initializes
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        await setupMySelectedUser();
+      } catch (error) {
+        console.error('Failed to setup selected user:', error);
+      }
+    };
+    
+    initializeUser();
+  }, []);
+
   return (
     <Stack.Navigator
       screenOptions={{

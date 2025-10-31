@@ -519,8 +519,8 @@ export default AuthService;
         method: 'POST',
         url: '/auth/guest',
         data: {
-          username: 'Guest User',
-          openid: `guest_${timestamp}_${randomId}`
+          username: 'test_user',
+          openid: 'test_user_ai'
         }
       });
       

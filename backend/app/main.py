@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.postgres_db import init_db
 from app.core.redis import init_redis
 from app.api import auth, upload, translation, users, health
 
@@ -23,12 +23,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AI Media Translation API...")
     
-    # Initialize database (optional)
+    # Initialize PostgreSQL database
     try:
         await init_db()
-        logger.info("Database initialized")
+        logger.info("PostgreSQL database initialized with connection pooling")
     except Exception as e:
-        logger.warning(f"Database initialization failed, continuing without database: {e}")
+        logger.error(f"PostgreSQL database initialization failed: {e}")
+        # In production, you might want to exit if database initialization fails
+        # For now, we'll continue and let individual endpoints handle database errors
     
     # Initialize Redis (optional)
     try:
@@ -42,10 +44,16 @@ async def lifespan(app: FastAPI):
     upload_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Upload directory ready: {upload_dir}")
     
+    # Log database connection info (without credentials)
+    logger.info(f"Database backend: PostgreSQL")
+    logger.info(f"Database host: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
+    logger.info(f"Database name: {settings.POSTGRES_DB}")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down AI Media Translation API...")
+    logger.info("Closing PostgreSQL connection pools...")
 
 # Create FastAPI app
 app = FastAPI(
@@ -139,6 +147,13 @@ async def root():
         "success": True,
         "message": "AI Media Translation API is running",
         "version": "1.0.0",
+        "database": "PostgreSQL",
+        "features": [
+            "Media file upload and processing",
+            "Speech-to-text transcription", 
+            "User authentication and management",
+            "Usage tracking and analytics"
+        ],
         "endpoints": {
             "health": "/health",
             "auth": "/api/v1/auth",
